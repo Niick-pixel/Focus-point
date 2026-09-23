@@ -185,13 +185,8 @@ function wireControls() {
   api.onPreviewStop(() => previewing && togglePreview());
 
   // Tabs
-  for (const tab of $$('.tab')) {
-    tab.addEventListener('click', () => {
-      $$('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-      $$('.panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === tab.dataset.tab));
-      if (tab.dataset.tab !== 'sound' && previewing) togglePreview();
-    });
-  }
+  for (const tab of $$('.tab')) tab.addEventListener('click', () => showTab(tab.dataset.tab));
+  api.onNavTab(showTab);
 
   $('#breakNow').addEventListener('click', () => api.breakNow());
   $('#pauseBtn').addEventListener('click', () => {
@@ -204,6 +199,14 @@ function wireControls() {
     settings = await api.resetSettings();
     render();
   });
+}
+
+function showTab(name) {
+  if (!$(`.tab[data-tab="${name}"]`)) return;
+  $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+  $$('.panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === name));
+  if (name !== 'sound' && previewing) togglePreview();
+  document.dispatchEvent(new CustomEvent('tabchange', { detail: name }));
 }
 
 async function togglePreview() {
@@ -284,6 +287,7 @@ function renderState(state) {
   $('#ring').style.strokeDasharray = String(CIRC);
   render();
   wireControls();
+  if (location.hash) showTab(location.hash.slice(1));
   renderState(await api.getState());
   api.onState(renderState);
   api.onSettings((s) => {

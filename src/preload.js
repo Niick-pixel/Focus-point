@@ -26,6 +26,12 @@ contextBridge.exposeInMainWorld('api', {
   restart: () => ipcRenderer.send('timer:restart'),
   pauseMenu: () => ipcRenderer.send('menu:pause'),
 
+  // stats
+  getStats: () => ipcRenderer.invoke('stats:get'),
+  clearStats: () => ipcRenderer.invoke('stats:clear'),
+  onStats: on('stats:changed'),
+  onNavTab: on('nav:tab'),
+
   // audio
   pickAudio: () => ipcRenderer.invoke('audio:pick'),
   audioUrls: (paths) => ipcRenderer.invoke('audio:urls', paths),

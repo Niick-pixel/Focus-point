@@ -35,6 +35,7 @@
     <button class="tab active" data-tab="rhythm" role="tab">Rhythm</button>
     <button class="tab" data-tab="break" role="tab">Break</button>
     <button class="tab" data-tab="sound" role="tab">Sound</button>
+    <button class="tab" data-tab="stats" role="tab">Stats</button>
     <button class="tab" data-tab="general" role="tab">General</button>
   </nav>
 
@@ -172,6 +173,48 @@
       </div>
     </section>
 
+    <!-- Stats -->
+    <section class="panel" data-panel="stats">
+      <div class="week-nav">
+        <button class="icon-btn" id="prevWeek" aria-label="Previous week">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+        <span id="weekLabel">This week</span>
+        <button class="icon-btn" id="nextWeek" aria-label="Next week">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+
+      <div class="hero-stat">
+        <div class="hero-value" id="restTotal">0 min</div>
+        <div class="hero-label" id="restLabel">rested this week</div>
+        <div class="delta" id="restDelta"></div>
+      </div>
+
+      <div class="chart" id="chart">
+        <div class="plot" id="bars"></div>
+        <div class="days" id="days" aria-hidden="true"></div>
+        <div class="tooltip" id="tooltip" role="status" hidden></div>
+      </div>
+      <button class="link table-toggle" id="tableToggle">View as table</button>
+      <table class="stats-table" id="statsTable" hidden>
+        <thead><tr><th>Day</th><th>Rested</th><th>Breaks</th><th>Skipped</th><th>Screen time</th></tr></thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="tiles">
+        <div class="tile"><div class="tile-label">Breaks taken</div><div class="tile-value" id="tileBreaks">0</div></div>
+        <div class="tile"><div class="tile-label">Skipped or snoozed</div><div class="tile-value" id="tileSkipped">0</div></div>
+        <div class="tile"><div class="tile-label">Screen time</div><div class="tile-value" id="tileScreen">0 min</div></div>
+        <div class="tile"><div class="tile-label">Rest per screen hour</div><div class="tile-value" id="tileRatio">—</div></div>
+      </div>
+
+      <div class="footer">
+        <button class="link" id="clearStats">Clear history</button>
+        <span>Stays on this computer</span>
+      </div>
+    </section>
+
     <!-- General -->
     <section class="panel" data-panel="general">
       <div class="field">
@@ -201,5 +244,6 @@
 
   <script src="audio/engine.js"></script>
   <script src="settings.js"></script>
+  <script src="stats-view.js"></script>
 </body>
 </html>

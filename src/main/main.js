@@ -7,6 +7,7 @@ const {
 const { Store } = require('./store');
 const { RestTimer } = require('./timer');
 const { createDetector } = require('./fullscreen');
+const { Stats } = require('./stats');
 
 const FAST = process.argv.includes('--fast'); // dev: "minutes" become seconds
 const START_HIDDEN = process.argv.includes('--hidden');
@@ -29,6 +30,7 @@ if (!app.requestSingleInstanceLock()) {
 app.setAppUserModelId('com.focuspoint.app');
 
 let store;
+let stats;
 let timer;
 let tray;
 let settingsWin = null;
@@ -64,10 +66,12 @@ function fileUrls(paths) {
 // ---------------------------------------------------------------------------
 // Settings window
 
-function openSettings() {
+function openSettings(tab) {
+  if (typeof tab !== 'string') tab = null; // menu clicks pass their own args
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.show();
     settingsWin.focus();
+    if (tab) settingsWin.webContents.send('nav:tab', tab);
     return;
   }
   const theme = THEMES[store.get().theme] || THEMES.night;
@@ -90,7 +94,7 @@ function openSettings() {
     },
   });
   settingsWin.removeMenu();
-  settingsWin.loadFile(path.join(RENDERER, 'settings.html'));
+  settingsWin.loadFile(path.join(RENDERER, 'settings.html'), tab ? { hash: tab } : undefined);
   settingsWin.once('ready-to-show', () => settingsWin.show());
   settingsWin.on('close', (e) => {
     if (!quitting) {
@@ -254,7 +258,8 @@ function buildTrayMenu(state) {
           ],
         },
     { type: 'separator' },
-    { label: 'Settings…', click: openSettings },
+    { label: 'This week\'s rest…', click: () => openSettings('stats') },
+    { label: 'Settings…', click: () => openSettings() },
     { label: 'Quit Focus Point', click: () => { quitting = true; app.quit(); } },
   ]);
 }
@@ -263,7 +268,7 @@ function createTray() {
   const img = nativeImage.createFromPath(path.join(ASSETS, 'tray.png'));
   tray = new Tray(img);
   tray.setToolTip('Focus Point');
-  tray.on('click', openSettings);
+  tray.on('click', () => openSettings());
   updateTray(timer.state());
 }
 
@@ -303,6 +308,11 @@ function registerIpc() {
   });
 
   ipcMain.handle('state:get', () => timer.state());
+  ipcMain.handle('stats:get', () => stats.get());
+  ipcMain.handle('stats:clear', () => {
+    stats.clear();
+    broadcast('stats:changed');
+  });
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), fast: FAST, platform: process.platform }));
 
   ipcMain.on('timer:breakNow', () => timer.breakNow());
@@ -377,6 +387,9 @@ app.whenReady().then(() => {
   powerMonitor.on('unlock-screen', () => timer.comeBack());
   powerMonitor.on('resume', () => timer.comeBack());
 
+  stats = new Stats(app.getPath('userData'));
+  stats.attach(timer, () => broadcast('stats:changed'));
+
   registerIpc();
   applyLoginItem(store.get().launchAtLogin);
   timer.start();
@@ -385,6 +398,9 @@ app.whenReady().then(() => {
   if (!START_HIDDEN) openSettings();
 });
 
-app.on('second-instance', () => app.whenReady().then(openSettings));
-app.on('before-quit', () => { quitting = true; });
+app.on('second-instance', () => app.whenReady().then(() => openSettings()));
+app.on('before-quit', () => {
+  quitting = true;
+  stats?.save();
+});
 app.on('window-all-closed', () => { /* keep running in the tray */ });

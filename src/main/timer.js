@@ -72,7 +72,7 @@ class RestTimer extends EventEmitter {
   finishBreak() {
     this.breaksTaken += 1;
     const s = this.getSettings();
-    this.emit('break-end', { completed: true });
+    this.emit('break-end', { completed: true, reason: 'completed' });
     if (s.confirmEnd) {
       this.phase = 'waiting';
       this.emit('break-waiting');
@@ -93,7 +93,7 @@ class RestTimer extends EventEmitter {
   skipBreak() {
     if (this.phase !== 'break' && this.phase !== 'waiting') return;
     const wasWaiting = this.phase === 'waiting';
-    if (!wasWaiting) this.emit('break-end', { completed: false });
+    if (!wasWaiting) this.emit('break-end', { completed: false, reason: 'skipped' });
     this.emit('break-closed');
     this.startWork();
   }
@@ -101,7 +101,7 @@ class RestTimer extends EventEmitter {
   snooze() {
     if (this.phase !== 'break') return;
     const s = this.getSettings();
-    this.emit('break-end', { completed: false });
+    this.emit('break-end', { completed: false, reason: 'snoozed' });
     this.emit('break-closed');
     this.startWork(s.snoozeMinutes * this.unitMs);
     this.warned = true; // don't warn again right before a snoozed break
@@ -113,8 +113,8 @@ class RestTimer extends EventEmitter {
   }
 
   pause(minutes) {
+    if (this.phase === 'break') this.emit('break-end', { completed: false, reason: 'paused' });
     if (this.phase === 'break' || this.phase === 'waiting') {
-      this.emit('break-end', { completed: false });
       this.emit('break-closed');
     }
     this.phase = 'paused';
