@@ -16,6 +16,8 @@ const DEFAULTS = {
   snoozeMinutes: 5,
   warningSeconds: 30, // heads-up notification before a break (0 = off)
   confirmEnd: false, // wait for "I'm back" before the next work block starts
+  holdForFullscreen: true, // don't interrupt fullscreen games / videos / presentations (Windows)
+  fullscreenMaxWaitMinutes: 0, // force the break after waiting this long (0 = wait as long as it takes)
   showBreathing: true,
   showTips: true,
   tips: [

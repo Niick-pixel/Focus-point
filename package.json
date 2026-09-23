@@ -1,7 +1,7 @@
 {
   "name": "focus-point",
   "productName": "Focus Point",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A calm break reminder: every so often it covers your screen and makes you rest, with rain and dreamy ambient sounds.",
   "main": "src/main/main.js",
   "author": "Nicolas",
@@ -41,6 +41,12 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "Focus Point"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ]
+  },
+  "dependencies": {
+    "koffi": "^3.3.1"
   }
 }

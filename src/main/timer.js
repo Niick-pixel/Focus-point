@@ -6,12 +6,13 @@
 //   waiting   – break finished, waiting for the user to click "I'm back" (confirmEnd)
 //   paused    – user paused reminders (optionally until a time)
 //   away      – user is idle / screen locked; the work timer restarts when they return
+//   deferred  – a break is due but a fullscreen game/video/presentation is in front; it waits
 const { EventEmitter } = require('events');
 
 class RestTimer extends EventEmitter {
   /**
    * @param {() => object} getSettings
-   * @param {{ unitMs?: number, now?: () => number, idleSeconds?: () => number }} opts
+   * @param {{ unitMs?: number, now?: () => number, idleSeconds?: () => number, isFullscreen?: () => boolean }} opts
    *   unitMs – length of one "minute" (60000 normally; 1000 in --fast dev mode)
    */
   constructor(getSettings, opts = {}) {
@@ -20,6 +21,8 @@ class RestTimer extends EventEmitter {
     this.unitMs = opts.unitMs ?? 60000;
     this.now = opts.now ?? Date.now;
     this.idleSeconds = opts.idleSeconds ?? (() => 0);
+    this.isFullscreen = opts.isFullscreen ?? (() => false);
+    this.deferredSince = 0;
 
     this.phase = 'working';
     this.endsAt = 0;          // end of the current work block or break
@@ -105,7 +108,7 @@ class RestTimer extends EventEmitter {
   }
 
   breakNow() {
-    if (this.phase === 'break') return;
+    if (this.phase === 'break' || this.phase === 'waiting') return;
     this.startBreak();
   }
 
@@ -132,7 +135,7 @@ class RestTimer extends EventEmitter {
 
   /** Screen locked / computer went to sleep. */
   goAway() {
-    if (this.phase === 'working') {
+    if (this.phase === 'working' || this.phase === 'deferred') {
       this.phase = 'away';
       this.emitState();
     }
@@ -151,17 +154,38 @@ class RestTimer extends EventEmitter {
 
     switch (this.phase) {
       case 'working': {
+        const fullscreen = s.holdForFullscreen && this.isFullscreen();
         // Idle long enough? You were already resting: restart the work block when you return.
-        if (s.idleResetMinutes > 0 && this.idleSeconds() * 1000 >= s.idleResetMinutes * this.unitMs) {
+        // (Not while fullscreen: a controller or a movie doesn't register as input.)
+        if (!fullscreen && s.idleResetMinutes > 0 && this.idleSeconds() * 1000 >= s.idleResetMinutes * this.unitMs) {
           this.phase = 'away';
           break;
         }
         const left = this.endsAt - now;
-        if (!this.warned && s.warningSeconds > 0 && left <= s.warningSeconds * 1000 && left > 0) {
+        if (!fullscreen && !this.warned && s.warningSeconds > 0 && left <= s.warningSeconds * 1000 && left > 0) {
           this.warned = true;
           this.emit('warning', { secondsLeft: Math.round(left / 1000) });
         }
-        if (left <= 0) this.startBreak();
+        if (left <= 0) {
+          if (fullscreen) {
+            this.phase = 'deferred';
+            this.deferredSince = now;
+          } else {
+            this.startBreak();
+          }
+        }
+        break;
+      }
+      case 'deferred': {
+        const stillFullscreen = s.holdForFullscreen && this.isFullscreen();
+        const maxWait = s.fullscreenMaxWaitMinutes > 0 ? s.fullscreenMaxWaitMinutes * this.unitMs : Infinity;
+        if (now - this.deferredSince >= maxWait) {
+          this.startBreak();
+        } else if (!stillFullscreen) {
+          // Game closed: give a heads-up, then the break follows shortly.
+          this.startWork(Math.max(10, s.warningSeconds) * 1000);
+          this.warned = false;
+        }
         break;
       }
       case 'break':
@@ -204,6 +228,7 @@ class RestTimer extends EventEmitter {
     return {
       phase: this.phase,
       remainingMs,
+      deferredMs: this.phase === 'deferred' ? now - this.deferredSince : null,
       totalMs,
       breaksTaken: this.breaksTaken,
       nextIsLong: s.longBreakEnabled && nextIndex % s.longBreakEvery === 0,

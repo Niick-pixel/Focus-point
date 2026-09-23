@@ -84,3 +84,53 @@ test('timed pause resumes by itself', () => {
   advance(15 * 60000);
   assert.strictEqual(t.phase, 'working');
 });
+
+function setupFullscreen(overrides = {}) {
+  let fullscreen = false;
+  const env = setup({ holdForFullscreen: true, fullscreenMaxWaitMinutes: 0, ...overrides });
+  env.t.isFullscreen = () => fullscreen;
+  env.setFullscreen = (v) => { fullscreen = v; };
+  return env;
+}
+
+test('a break due during a fullscreen game waits until the game closes', () => {
+  const { t, events, advance, setFullscreen } = setupFullscreen();
+  setFullscreen(true);
+  advance(45 * 60000);
+  assert.strictEqual(t.phase, 'deferred');
+  assert.ok(!events.some((e) => e[0] === 'warning'), 'no warning pops up over the game');
+  advance(3 * 60 * 60000); // three hours of gaming
+  assert.strictEqual(t.phase, 'deferred');
+  setFullscreen(false);
+  advance(1000);
+  assert.strictEqual(t.phase, 'working'); // short heads-up window
+  advance(1000);
+  assert.ok(events.some((e) => e[0] === 'warning'));
+  advance(30000);
+  assert.strictEqual(t.phase, 'break');
+});
+
+test('fullscreen does not count as being away, even with no input', () => {
+  const { t, advance, setIdle, setFullscreen } = setupFullscreen();
+  setFullscreen(true);
+  setIdle(20 * 60); // watching a movie, hands off
+  advance(10 * 60000);
+  assert.strictEqual(t.phase, 'working');
+});
+
+test('max wait forces the break after a limit', () => {
+  const { t, advance, setFullscreen } = setupFullscreen({ fullscreenMaxWaitMinutes: 30 });
+  setFullscreen(true);
+  advance(45 * 60000);
+  advance(29 * 60000);
+  assert.strictEqual(t.phase, 'deferred');
+  advance(60000);
+  assert.strictEqual(t.phase, 'break');
+});
+
+test('with the option off, breaks interrupt fullscreen apps', () => {
+  const { t, advance, setFullscreen } = setupFullscreen({ holdForFullscreen: false });
+  setFullscreen(true);
+  advance(45 * 60000);
+  assert.strictEqual(t.phase, 'break');
+});

@@ -87,6 +87,16 @@
           <input type="range" min="1" max="15" step="1" data-key="snoozeMinutes" data-fmt="min" />
         </div>
       </div>
+      <div class="row" data-windows-only>
+        <div><label>Don't interrupt fullscreen</label><small>Games, videos and presentations: the break waits until you exit</small></div>
+        <label class="switch"><input type="checkbox" data-key="holdForFullscreen" /><span></span></label>
+      </div>
+      <div class="sub" data-show-if="holdForFullscreen" data-windows-only>
+        <div class="field">
+          <div class="field-head"><label>Wait at most</label><output data-for="fullscreenMaxWaitMinutes"></output></div>
+          <input type="range" min="0" max="180" step="15" data-key="fullscreenMaxWaitMinutes" data-fmt="maxwait" />
+        </div>
+      </div>
       <div class="row">
         <div><label>Wait for me</label><small>Keep the screen up until I click "I'm back"</small></div>
         <label class="switch"><input type="checkbox" data-key="confirmEnd" /><span></span></label>

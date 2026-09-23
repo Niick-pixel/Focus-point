@@ -15,6 +15,7 @@ A calm break reminder for Windows. Every so often (45 minutes by default) it gen
 - **Your own music.** Add MP3/WAV/OGG/FLAC/M4A files. They're shuffled and mixed with the ambient layers.
 - **Customizable rhythm.** Choose how long you work and rest, add a longer break every N breaks, and get a heads-up notification before each break.
 - **Soft or strict.** Skip and Snooze buttons are optional. You can also turn on "Wait for me" so work doesn't restart until you click *I'm back*.
+- **Never interrupts your games.** If a fullscreen game, video or presentation is in front when a break is due, the break waits. Exclusive and borderless-windowed games both count. When you exit, you get a short heads-up and then the break. You can also set a maximum wait if you want a guaranteed break.
 - **Knows when you're away.** Locking the screen, sleep, or being idle for X minutes counts as resting, and the timer starts fresh when you return.
 - **Lives in the tray.** Take a break now, pause for 15 min / 30 min / 1 h / 2 h, restart the timer, or quit.
 - **Four themes:** Night, Dusk, Forest, Sand.
@@ -44,6 +45,7 @@ npm run dist       # build the Windows installer into dist/ (run on Windows)
 | --- | --- |
 | Timer (work → break → work, long breaks, idle, snooze, pause) | `src/main/timer.js` |
 | App shell: tray, windows, overlays on every display, notifications | `src/main/main.js` |
+| Fullscreen game/video detection (Win32 APIs via koffi) | `src/main/fullscreen.js` |
 | Settings saved to `%APPDATA%/Focus Point/settings.json` | `src/main/store.js` |
 | Sound synthesizer (Web Audio API) | `src/renderer/audio/engine.js` |
 | Settings UI | `src/renderer/settings.*` |

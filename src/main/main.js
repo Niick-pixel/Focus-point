@@ -6,6 +6,7 @@ const {
 } = require('electron');
 const { Store } = require('./store');
 const { RestTimer } = require('./timer');
+const { createDetector } = require('./fullscreen');
 
 const FAST = process.argv.includes('--fast'); // dev: "minutes" become seconds
 const START_HIDDEN = process.argv.includes('--hidden');
@@ -228,6 +229,7 @@ function trayLabel(state) {
     case 'waiting': return 'Break finished';
     case 'paused': return state.remainingMs != null ? `Paused — ${fmt(state.remainingMs)} left` : 'Paused';
     case 'away': return 'Away — timer restarts when you return';
+    case 'deferred': return 'Break waiting — fullscreen app open';
     default: return 'Focus Point';
   }
 }
@@ -301,7 +303,7 @@ function registerIpc() {
   });
 
   ipcMain.handle('state:get', () => timer.state());
-  ipcMain.handle('app:info', () => ({ version: app.getVersion(), fast: FAST }));
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), fast: FAST, platform: process.platform }));
 
   ipcMain.on('timer:breakNow', () => timer.breakNow());
   ipcMain.on('timer:skip', () => timer.skipBreak());
@@ -345,6 +347,7 @@ app.whenReady().then(() => {
   timer = new RestTimer(() => store.get(), {
     unitMs: FAST ? 1000 : 60000,
     idleSeconds: () => powerMonitor.getSystemIdleTime(),
+    isFullscreen: createDetector(),
   });
 
   timer.on('state', (state) => {

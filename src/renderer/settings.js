@@ -26,6 +26,7 @@ const FORMATS = {
   sec: (v) => (v === 0 ? 'Off' : `${v} s`),
   breaks: (v) => `${v} breaks`,
   idle: (v) => (v === 0 ? 'Never' : `${v} min`),
+  maxwait: (v) => (v === 0 ? 'As long as it takes' : v < 60 ? `${v} min` : `${Math.floor(v / 60)} h${v % 60 ? ` ${v % 60} min` : ''}`),
 };
 
 const clockFmt = (ms) => {
@@ -265,8 +266,15 @@ function renderState(state) {
       clock.textContent = 'Away';
       caption.textContent = 'fresh start when you return';
       break;
+    case 'deferred':
+      clock.textContent = 'Waiting';
+      caption.textContent = 'break after you exit fullscreen';
+      progress = 0;
+      break;
   }
   ring.style.strokeDashoffset = String(CIRC * (1 - progress));
+  ring.style.opacity = progress > 0 ? '1' : '0';
+  clock.classList.toggle('word', !/\d/.test(clock.textContent));
 }
 
 // ---- boot -------------------------------------------------------------------
@@ -284,5 +292,8 @@ function renderState(state) {
     render();
   });
   const info = await api.appInfo();
+  if (info.platform !== 'win32') {
+    for (const el of $$('[data-windows-only]')) el.remove();
+  }
   $('#version').textContent = `v${info.version}${info.fast ? ' · fast mode' : ''}`;
 })();
