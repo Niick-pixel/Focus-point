@@ -115,9 +115,15 @@
         <div><label>Wait for me</label><small>Keep the screen up until I click "I'm back"</small></div>
         <label class="switch"><input type="checkbox" data-key="confirmEnd" /><span></span></label>
       </div>
-      <div class="row">
-        <div><label>Breathing guide</label><small>A slow 4 · 2 · 6 breathing orb</small></div>
-        <label class="switch"><input type="checkbox" data-key="showBreathing" /><span></span></label>
+      <div class="field">
+        <label>During breaks</label>
+        <div class="segmented" data-choice-key="breakActivity" role="radiogroup" aria-label="During breaks">
+          <button data-value="breathe" role="radio">Breathe</button>
+          <button data-value="eyes" role="radio">Eyes</button>
+          <button data-value="alternate" role="radio">Alternate</button>
+          <button data-value="none" role="radio">Nothing</button>
+        </div>
+        <small class="hint" id="activityHint"></small>
       </div>
       <div class="row">
         <div><label>Rest tips</label><small>A gentle suggestion on each break</small></div>
@@ -242,6 +248,14 @@
       <div class="row">
         <div><label>Start with Windows</label><small>Runs quietly in the tray</small></div>
         <label class="switch"><input type="checkbox" data-key="launchAtLogin" /><span></span></label>
+      </div>
+      <div class="row">
+        <div><label>Update automatically</label><small id="updateStatus">New versions download in the background</small></div>
+        <label class="switch"><input type="checkbox" data-key="autoUpdate" /><span></span></label>
+      </div>
+      <div class="update-actions">
+        <button class="btn" id="checkUpdates">Check for updates</button>
+        <button class="btn primary" id="installUpdate" hidden>Restart to update</button>
       </div>
       <div class="field">
         <div class="field-head"><label>Restart the timer when I'm away for</label><output data-for="idleResetMinutes"></output></div>

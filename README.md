@@ -11,7 +11,8 @@ A calm break reminder for Windows. Every so often (45 minutes by default) it gen
 
 - **Break screen on every monitor.** It covers the whole screen, stays on top, and fades in and out slowly.
 - **Breathing guide.** An orb for 4 · 2 · 6 breathing (in, hold, out). A longer exhale helps you calm down.
-- **Generated sounds, no downloads.** Rain, ocean waves, wind, fireplace and a *Dreamscape* pad (slow chords, distant bells, long reverb) are synthesized live, so they never loop audibly. Mix them with sliders or pick a preset: Rainy night, Dreamscape, Seaside, Cabin, Storm.
+- **Real rain, plus live-generated ambience.** The rain is a real public-domain (CC0) field recording, softened to sound like rain heard from indoors and looped seamlessly. Ocean waves, wind, fireplace and a *Dreamscape* pad (slow chords, distant bells, long reverb) are synthesized live, so they never loop audibly. Mix them with sliders or pick a preset: Rainy night, Dreamscape, Seaside, Cabin, Storm.
+- **Eye exercises.** Follow a glowing dot side to side, up and down, in circles and figure-eights, shift your focus near and far, then close your eyes. Choose breathing, eye exercises, both on alternating breaks, or nothing.
 - **Your own music.** Add MP3/WAV/OGG/FLAC/M4A files. They're shuffled and mixed with the ambient layers.
 - **Customizable rhythm.** Choose how long you work and rest, add a longer break every N breaks, and get a heads-up notification before each break.
 - **Soft or strict.** Skip and Snooze buttons are optional. You can also turn on "Wait for me" so work doesn't restart until you click *I'm back*.
@@ -23,14 +24,15 @@ A calm break reminder for Windows. Every so often (45 minutes by default) it gen
 - **Lives in the tray.** Take a break now, pause for 15 min / 30 min / 1 h / 2 h, restart the timer, or quit.
 - **Four themes:** Night, Dusk, Forest, Sand.
 - **Starts with Windows** (optional) and runs quietly in the tray.
+- **Updates itself.** New versions download in the background from GitHub Releases and install when you quit, or right away from the tray.
 
 ## Install (Windows)
 
-**Easiest:** open the repo's **Actions** tab → *Build Windows app* → latest run → download **FocusPoint-Setup** → run the `.exe`.
-
-To publish a proper release, push a tag such as `v1.0.0`. The installer is attached to a GitHub Release automatically.
+Download the latest **`FocusPoint-Setup-x.y.z.exe`** from the [Releases page](https://github.com/Niick-pixel/Focus-purpose/releases/latest) and run it. After that, the app keeps itself up to date.
 
 > Windows SmartScreen may warn you because the app isn't code-signed. Click *More info → Run anyway*.
+
+**Publishing a new version:** bump `version` in `package.json`, commit, then push a matching tag (e.g. `git tag v1.5.0 && git push origin v1.5.0`). The *Build Windows app* workflow builds the installer and attaches it, together with the `latest.yml` update manifest, to a GitHub Release. Every installed copy picks it up within a few hours.
 
 ## Run from source
 
@@ -52,6 +54,7 @@ npm run dist       # build the Windows installer into dist/ (run on Windows)
 | Rest history (per-day totals in `stats.json`) | `src/main/stats.js`, `src/renderer/stats-view.js` |
 | Strict mode keyboard hook (`WH_KEYBOARD_LL`) | `src/main/keyblock.js` |
 | Break zones (time ranges that hold breaks) | `src/main/zones.js`, `src/renderer/zones-view.js` |
+| Auto-updates (electron-updater + GitHub Releases) | `src/main/updater.js` |
 | Settings saved to `%APPDATA%/Focus Point/settings.json` | `src/main/store.js` |
 | Sound synthesizer (Web Audio API) | `src/renderer/audio/engine.js` |
 | Settings UI | `src/renderer/settings.*` |
@@ -59,7 +62,7 @@ npm run dist       # build the Windows installer into dist/ (run on Windows)
 
 The sounds are built from a few basic ingredients:
 
-- **Rain.** Pink noise (softer highs than white noise, like real rain), a low brown-noise rumble, and tiny randomized droplet clicks panned across the stereo field.
+- **Rain.** A CC0 field recording ([credits](assets/sounds/CREDITS.md)): the harsh 3 kHz region and top end are tamed so it sounds like rain heard from indoors, a time-shifted copy makes it truly stereo, and a 3-second crossfade makes the 57-second loop seamless. If it can't load, the app falls back to synthesized rain: pink noise, a brown-noise rumble, and randomized droplet clicks.
 - **Ocean.** Brown noise with its volume and filter swept by a very slow wave (~13 s per wave), plus a bright foam wash on each crest.
 - **Wind.** White noise through a band-pass filter whose frequency drifts, which gives the whistle.
 - **Fireplace.** A low roar plus random crackles and pops.

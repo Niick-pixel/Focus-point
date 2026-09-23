@@ -20,7 +20,8 @@ const DEFAULTS = {
   confirmEnd: false, // wait for "I'm back" before the next work block starts
   holdForFullscreen: true, // don't interrupt fullscreen games / videos / presentations (Windows)
   fullscreenMaxWaitMinutes: 0, // force the break after waiting this long (0 = wait as long as it takes)
-  showBreathing: true,
+  showBreathing: true, // legacy; breakActivity decides now
+  breakActivity: 'alternate', // 'breathe' | 'eyes' | 'alternate' | 'none'
   showTips: true,
   tips: [
     'Look at something far away. Let your eyes soften.',
@@ -50,6 +51,7 @@ const DEFAULTS = {
   // General
   theme: 'night',
   launchAtLogin: true,
+  autoUpdate: true, // download new versions from GitHub Releases in the background
   idleResetMinutes: 5, // if you're away this long, the work timer restarts (0 = off)
 };
 
@@ -62,6 +64,7 @@ class Store {
   #load() {
     try {
       const saved = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      if (!('breakActivity' in saved)) saved.breakActivity = saved.showBreathing === false ? 'none' : 'breathe';
       return { ...DEFAULTS, ...saved, mix: { ...DEFAULTS.mix, ...(saved.mix || {}) } };
     } catch {
       return structuredClone(DEFAULTS);
