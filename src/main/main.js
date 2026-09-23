@@ -1,0 +1,387 @@
+const path = require('path');
+const { pathToFileURL } = require('url');
+const {
+  app, BrowserWindow, Tray, Menu, screen, ipcMain, powerMonitor,
+  Notification, nativeImage, dialog,
+} = require('electron');
+const { Store } = require('./store');
+const { RestTimer } = require('./timer');
+
+const FAST = process.argv.includes('--fast'); // dev: "minutes" become seconds
+const START_HIDDEN = process.argv.includes('--hidden');
+const ASSETS = path.join(__dirname, '..', '..', 'assets');
+const RENDERER = path.join(__dirname, '..', 'renderer');
+
+// Title-bar colors for each theme (must match the CSS themes).
+const THEMES = {
+  night:  { bg: '#12131f', fg: '#c9c6e8' },
+  dusk:   { bg: '#1c1426', fg: '#e4c9e0' },
+  forest: { bg: '#0f1a17', fg: '#bfdccd' },
+  sand:   { bg: '#f3eee6', fg: '#5a4f45' },
+};
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  return;
+}
+
+app.setAppUserModelId('com.focuspoint.app');
+
+let store;
+let timer;
+let tray;
+let settingsWin = null;
+let overlays = [];
+let quitting = false;
+let lastTrayLabel = '';
+
+// ---------------------------------------------------------------------------
+// Helpers
+
+const fmt = (ms) => {
+  const total = Math.ceil(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return m >= 1 ? `${m} min` : `${s}s`;
+};
+
+function broadcast(channel, payload) {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send(channel, payload);
+  }
+}
+
+function applyLoginItem(enabled) {
+  if (!app.isPackaged) return; // don't register the dev electron binary
+  app.setLoginItemSettings({ openAtLogin: enabled, args: ['--hidden'] });
+}
+
+function fileUrls(paths) {
+  return (paths || []).map((p) => pathToFileURL(p).href);
+}
+
+// ---------------------------------------------------------------------------
+// Settings window
+
+function openSettings() {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.show();
+    settingsWin.focus();
+    return;
+  }
+  const theme = THEMES[store.get().theme] || THEMES.night;
+  settingsWin = new BrowserWindow({
+    width: 460,
+    height: 740,
+    minWidth: 400,
+    minHeight: 560,
+    show: false,
+    title: 'Focus Point',
+    icon: path.join(ASSETS, 'icon.png'),
+    backgroundColor: theme.bg,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: theme.bg, symbolColor: theme.fg, height: 36 },
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  settingsWin.removeMenu();
+  settingsWin.loadFile(path.join(RENDERER, 'settings.html'));
+  settingsWin.once('ready-to-show', () => settingsWin.show());
+  settingsWin.on('close', (e) => {
+    if (!quitting) {
+      e.preventDefault();
+      settingsWin.webContents.send('preview:stop');
+      settingsWin.hide();
+    }
+  });
+  settingsWin.on('closed', () => { settingsWin = null; });
+}
+
+function applyThemeToSettings(themeName) {
+  const theme = THEMES[themeName] || THEMES.night;
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.setBackgroundColor(theme.bg);
+    try {
+      settingsWin.setTitleBarOverlay({ color: theme.bg, symbolColor: theme.fg, height: 36 });
+    } catch { /* not supported on this platform */ }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Break overlays (one per monitor)
+
+function pickTip(settings) {
+  const tips = (settings.tips || []).filter((t) => t.trim());
+  if (!settings.showTips || !tips.length) return '';
+  return tips[Math.floor(Math.random() * tips.length)];
+}
+
+function destroyWindows(list) {
+  for (const w of list) {
+    if (!w.isDestroyed()) {
+      w.__allowClose = true;
+      w.destroy();
+    }
+  }
+}
+
+function destroyOverlays() {
+  destroyWindows(overlays);
+  overlays = [];
+}
+
+function openOverlays(info) {
+  destroyOverlays();
+  const s = store.get();
+  const tip = pickTip(s);
+  const primaryId = screen.getPrimaryDisplay().id;
+
+  // Stop the settings preview so sounds don't double up.
+  if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('preview:stop');
+
+  for (const display of screen.getAllDisplays()) {
+    const primary = display.id === primaryId;
+    const { x, y, width, height } = display.bounds;
+    const win = new BrowserWindow({
+      x, y, width, height,
+      show: false,
+      frame: false,
+      transparent: true,
+      backgroundColor: '#00000000',
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: true,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      hasShadow: false,
+      webPreferences: {
+        preload: path.join(__dirname, '..', 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        backgroundThrottling: false,
+        autoplayPolicy: 'no-user-gesture-required',
+      },
+    });
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    win.loadFile(path.join(RENDERER, 'break.html'));
+
+    win.on('close', (e) => { if (!win.__allowClose) e.preventDefault(); });
+
+    // Keep the break in front: if focus leaves every overlay, pull it back.
+    win.on('blur', () => {
+      setTimeout(() => {
+        if (win.isDestroyed() || !overlays.includes(win)) return;
+        const focused = BrowserWindow.getFocusedWindow();
+        if (!focused || !overlays.includes(focused)) {
+          win.setAlwaysOnTop(true, 'screen-saver');
+          win.moveTop();
+          if (primary) win.focus();
+        }
+      }, 150);
+    });
+
+    win.webContents.once('did-finish-load', () => {
+      win.webContents.send('break:start', {
+        ...info,
+        primary,
+        tip,
+        theme: s.theme,
+        allowSkip: s.allowSkip,
+        allowSnooze: s.allowSnooze,
+        snoozeMinutes: s.snoozeMinutes,
+        showBreathing: s.showBreathing,
+        sound: primary && s.soundEnabled
+          ? { master: s.masterVolume, mix: s.mix, customUrls: fileUrls(s.customFiles), shuffle: s.customShuffle }
+          : null,
+      });
+      win.setFullScreen(true);
+      win.show();
+      if (primary) win.focus();
+    });
+
+    overlays.push(win);
+  }
+}
+
+function closeOverlays() {
+  if (!overlays.length) return;
+  const closing = overlays;
+  overlays = [];
+  for (const w of closing) if (!w.isDestroyed()) w.webContents.send('break:closing');
+  setTimeout(() => destroyWindows(closing), 1600); // let the fade-out finish
+}
+
+// ---------------------------------------------------------------------------
+// Tray
+
+function trayLabel(state) {
+  switch (state.phase) {
+    case 'working': return `Next break in ${fmt(state.remainingMs)}`;
+    case 'break': return `On a break — ${fmt(state.remainingMs)} left`;
+    case 'waiting': return 'Break finished';
+    case 'paused': return state.remainingMs != null ? `Paused — ${fmt(state.remainingMs)} left` : 'Paused';
+    case 'away': return 'Away — timer restarts when you return';
+    default: return 'Focus Point';
+  }
+}
+
+function buildTrayMenu(state) {
+  const paused = state.phase === 'paused' || state.phase === 'away';
+  return Menu.buildFromTemplate([
+    { label: trayLabel(state), enabled: false },
+    { type: 'separator' },
+    { label: 'Take a break now', click: () => timer.breakNow(), enabled: state.phase !== 'break' },
+    { label: 'Restart work timer', click: () => timer.startWork(), enabled: state.phase === 'working' },
+    paused
+      ? { label: 'Resume', click: () => timer.resume() }
+      : {
+          label: 'Pause',
+          submenu: [
+            { label: 'For 15 minutes', click: () => timer.pause(15) },
+            { label: 'For 30 minutes', click: () => timer.pause(30) },
+            { label: 'For 1 hour', click: () => timer.pause(60) },
+            { label: 'For 2 hours', click: () => timer.pause(120) },
+            { label: 'Until I resume', click: () => timer.pause(null) },
+          ],
+        },
+    { type: 'separator' },
+    { label: 'Settings…', click: openSettings },
+    { label: 'Quit Focus Point', click: () => { quitting = true; app.quit(); } },
+  ]);
+}
+
+function createTray() {
+  const img = nativeImage.createFromPath(path.join(ASSETS, 'tray.png'));
+  tray = new Tray(img);
+  tray.setToolTip('Focus Point');
+  tray.on('click', openSettings);
+  updateTray(timer.state());
+}
+
+function updateTray(state) {
+  if (!tray) return;
+  const label = trayLabel(state);
+  tray.setToolTip(`Focus Point — ${label}`);
+  // Rebuild the menu only when its text changes (avoids closing an open menu every second).
+  const key = `${label}|${state.phase}`;
+  if (key !== lastTrayLabel) {
+    lastTrayLabel = key;
+    tray.setContextMenu(buildTrayMenu(state));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// IPC
+
+function registerIpc() {
+  ipcMain.handle('settings:get', () => store.get());
+  ipcMain.handle('settings:reset', () => {
+    const s = store.reset();
+    applyThemeToSettings(s.theme);
+    applyLoginItem(s.launchAtLogin);
+    timer.restartWork();
+    broadcast('settings:changed', s);
+    return s;
+  });
+  ipcMain.handle('settings:set', (_e, partial) => {
+    const before = store.get();
+    const s = store.set(partial);
+    if ('theme' in partial) applyThemeToSettings(s.theme);
+    if ('launchAtLogin' in partial) applyLoginItem(s.launchAtLogin);
+    if ('workMinutes' in partial && partial.workMinutes !== before.workMinutes) timer.restartWork();
+    broadcast('settings:changed', s);
+    return s;
+  });
+
+  ipcMain.handle('state:get', () => timer.state());
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), fast: FAST }));
+
+  ipcMain.on('timer:breakNow', () => timer.breakNow());
+  ipcMain.on('timer:skip', () => timer.skipBreak());
+  ipcMain.on('timer:snooze', () => timer.snooze());
+  ipcMain.on('timer:back', () => timer.confirmBack());
+  ipcMain.on('timer:pause', (_e, minutes) => timer.pause(minutes));
+  ipcMain.on('timer:resume', () => timer.resume());
+  ipcMain.on('timer:restart', () => timer.startWork());
+
+  ipcMain.on('menu:pause', (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    Menu.buildFromTemplate([
+      { label: 'For 15 minutes', click: () => timer.pause(15) },
+      { label: 'For 30 minutes', click: () => timer.pause(30) },
+      { label: 'For 1 hour', click: () => timer.pause(60) },
+      { label: 'For 2 hours', click: () => timer.pause(120) },
+      { label: 'Until I resume', click: () => timer.pause(null) },
+    ]).popup({ window: win });
+  });
+
+  ipcMain.handle('audio:pick', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const res = await dialog.showOpenDialog(win, {
+      title: 'Add your own sounds',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'opus', 'webm'] }],
+    });
+    return res.canceled ? [] : res.filePaths;
+  });
+  ipcMain.handle('audio:urls', (_e, paths) => fileUrls(paths));
+}
+
+// ---------------------------------------------------------------------------
+// Boot
+
+app.whenReady().then(() => {
+  store = new Store(app.getPath('userData'));
+  const firstRun = !require('fs').existsSync(store.file);
+  if (firstRun) store.set({}); // write defaults
+
+  timer = new RestTimer(() => store.get(), {
+    unitMs: FAST ? 1000 : 60000,
+    idleSeconds: () => powerMonitor.getSystemIdleTime(),
+  });
+
+  timer.on('state', (state) => {
+    updateTray(state);
+    broadcast('state', state);
+  });
+  timer.on('warning', ({ secondsLeft }) => {
+    if (!Notification.isSupported()) return;
+    new Notification({
+      title: `Break in ${secondsLeft} seconds`,
+      body: 'Start wrapping up — time to rest your eyes soon.',
+      icon: path.join(ASSETS, 'icon.png'),
+      silent: true,
+    }).show();
+  });
+  timer.on('break-start', (info) => openOverlays(info));
+  timer.on('break-waiting', () => {
+    for (const w of overlays) if (!w.isDestroyed()) w.webContents.send('break:waiting');
+  });
+  timer.on('break-end', ({ completed }) => {
+    if (!(completed && store.get().confirmEnd)) closeOverlays();
+  });
+  timer.on('break-closed', closeOverlays);
+
+  powerMonitor.on('lock-screen', () => timer.goAway());
+  powerMonitor.on('suspend', () => timer.goAway());
+  powerMonitor.on('unlock-screen', () => timer.comeBack());
+  powerMonitor.on('resume', () => timer.comeBack());
+
+  registerIpc();
+  applyLoginItem(store.get().launchAtLogin);
+  timer.start();
+  createTray();
+
+  if (!START_HIDDEN) openSettings();
+});
+
+app.on('second-instance', () => app.whenReady().then(openSettings));
+app.on('before-quit', () => { quitting = true; });
+app.on('window-all-closed', () => { /* keep running in the tray */ });

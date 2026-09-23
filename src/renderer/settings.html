@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en" data-theme="night">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' file: blob:; img-src 'self' data:" />
+  <title>Focus Point</title>
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <header class="titlebar">
+    <span class="brand"><span class="dot"></span>Focus Point</span>
+  </header>
+
+  <!-- Status -->
+  <section class="hero">
+    <div class="dial">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="track" cx="60" cy="60" r="54" />
+        <circle class="fill" id="ring" cx="60" cy="60" r="54" />
+      </svg>
+      <div class="dial-text">
+        <div class="clock" id="clock">45:00</div>
+        <div class="caption" id="caption">until your break</div>
+      </div>
+    </div>
+    <div class="hero-actions">
+      <button class="btn primary" id="breakNow">Break now</button>
+      <button class="btn" id="pauseBtn">Pause</button>
+    </div>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="rhythm" role="tab">Rhythm</button>
+    <button class="tab" data-tab="break" role="tab">Break</button>
+    <button class="tab" data-tab="sound" role="tab">Sound</button>
+    <button class="tab" data-tab="general" role="tab">General</button>
+  </nav>
+
+  <div class="panels">
+    <!-- Rhythm -->
+    <section class="panel active" data-panel="rhythm">
+      <div class="field">
+        <div class="field-head"><label>Work for</label><output data-for="workMinutes"></output></div>
+        <input type="range" min="5" max="120" step="5" data-key="workMinutes" data-fmt="min" />
+      </div>
+      <div class="field">
+        <div class="field-head"><label>Then rest for</label><output data-for="breakMinutes"></output></div>
+        <input type="range" min="0.5" max="15" step="0.5" data-key="breakMinutes" data-fmt="min" />
+      </div>
+
+      <div class="row">
+        <div><label>Longer breaks</label><small>Every few breaks, rest a little longer</small></div>
+        <label class="switch"><input type="checkbox" data-key="longBreakEnabled" /><span></span></label>
+      </div>
+      <div class="sub" data-show-if="longBreakEnabled">
+        <div class="field">
+          <div class="field-head"><label>Every</label><output data-for="longBreakEvery"></output></div>
+          <input type="range" min="2" max="8" step="1" data-key="longBreakEvery" data-fmt="breaks" />
+        </div>
+        <div class="field">
+          <div class="field-head"><label>Long break length</label><output data-for="longBreakMinutes"></output></div>
+          <input type="range" min="5" max="30" step="1" data-key="longBreakMinutes" data-fmt="min" />
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-head"><label>Heads-up before a break</label><output data-for="warningSeconds"></output></div>
+        <input type="range" min="0" max="120" step="10" data-key="warningSeconds" data-fmt="sec" />
+      </div>
+    </section>
+
+    <!-- Break -->
+    <section class="panel" data-panel="break">
+      <div class="row">
+        <div><label>Allow skipping</label><small>Show a Skip button on the break screen</small></div>
+        <label class="switch"><input type="checkbox" data-key="allowSkip" /><span></span></label>
+      </div>
+      <div class="row">
+        <div><label>Allow snoozing</label><small>Push the break back a few minutes</small></div>
+        <label class="switch"><input type="checkbox" data-key="allowSnooze" /><span></span></label>
+      </div>
+      <div class="sub" data-show-if="allowSnooze">
+        <div class="field">
+          <div class="field-head"><label>Snooze for</label><output data-for="snoozeMinutes"></output></div>
+          <input type="range" min="1" max="15" step="1" data-key="snoozeMinutes" data-fmt="min" />
+        </div>
+      </div>
+      <div class="row">
+        <div><label>Wait for me</label><small>Keep the screen up until I click "I'm back"</small></div>
+        <label class="switch"><input type="checkbox" data-key="confirmEnd" /><span></span></label>
+      </div>
+      <div class="row">
+        <div><label>Breathing guide</label><small>A slow 4 · 2 · 6 breathing orb</small></div>
+        <label class="switch"><input type="checkbox" data-key="showBreathing" /><span></span></label>
+      </div>
+      <div class="row">
+        <div><label>Rest tips</label><small>A gentle suggestion on each break</small></div>
+        <label class="switch"><input type="checkbox" data-key="showTips" /><span></span></label>
+      </div>
+      <div class="sub" data-show-if="showTips">
+        <label class="small-label" for="tips">Your tips — one per line</label>
+        <textarea id="tips" rows="6" spellcheck="false"></textarea>
+      </div>
+    </section>
+
+    <!-- Sound -->
+    <section class="panel" data-panel="sound">
+      <div class="row">
+        <div><label>Sound during breaks</label><small>Everything is generated live, no downloads</small></div>
+        <label class="switch"><input type="checkbox" data-key="soundEnabled" /><span></span></label>
+      </div>
+
+      <div class="presets" id="presets"></div>
+
+      <div class="mixer">
+        <div class="mix-row">
+          <span class="mix-name">Rain</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="mix.rain" />
+        </div>
+        <div class="mix-row">
+          <span class="mix-name">Dreamscape</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="mix.dream" />
+        </div>
+        <div class="mix-row">
+          <span class="mix-name">Ocean</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="mix.ocean" />
+        </div>
+        <div class="mix-row">
+          <span class="mix-name">Wind</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="mix.wind" />
+        </div>
+        <div class="mix-row">
+          <span class="mix-name">Fireplace</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="mix.fire" />
+        </div>
+        <div class="mix-row">
+          <span class="mix-name">Your files</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="mix.custom" />
+        </div>
+        <div class="mix-row master">
+          <span class="mix-name">Volume</span>
+          <input type="range" min="0" max="1" step="0.01" data-key="masterVolume" />
+        </div>
+      </div>
+
+      <button class="btn listen" id="preview">
+        <span class="play-icon"></span><span id="previewLabel">Listen</span>
+      </button>
+
+      <div class="files">
+        <div class="files-head">
+          <label>Your files</label>
+          <button class="link" id="addFiles">+ Add audio</button>
+        </div>
+        <ul id="fileList"></ul>
+        <div class="row compact">
+          <div><label>Shuffle</label></div>
+          <label class="switch"><input type="checkbox" data-key="customShuffle" /><span></span></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- General -->
+    <section class="panel" data-panel="general">
+      <div class="field">
+        <label>Theme</label>
+        <div class="swatches" id="swatches">
+          <button data-theme-choice="night" title="Night"><i style="--c1:#12131f;--c2:#b6a6ff"></i><span>Night</span></button>
+          <button data-theme-choice="dusk" title="Dusk"><i style="--c1:#1c1426;--c2:#f3a9c9"></i><span>Dusk</span></button>
+          <button data-theme-choice="forest" title="Forest"><i style="--c1:#0f1a17;--c2:#8fd8b2"></i><span>Forest</span></button>
+          <button data-theme-choice="sand" title="Sand"><i style="--c1:#f3eee6;--c2:#c27a52"></i><span>Sand</span></button>
+        </div>
+      </div>
+      <div class="row">
+        <div><label>Start with Windows</label><small>Runs quietly in the tray</small></div>
+        <label class="switch"><input type="checkbox" data-key="launchAtLogin" /><span></span></label>
+      </div>
+      <div class="field">
+        <div class="field-head"><label>Restart the timer when I'm away for</label><output data-for="idleResetMinutes"></output></div>
+        <input type="range" min="0" max="30" step="1" data-key="idleResetMinutes" data-fmt="idle" />
+        <small class="hint">No mouse or keyboard activity counts as resting. Locking the screen always counts.</small>
+      </div>
+      <div class="footer">
+        <button class="link" id="reset">Reset to defaults</button>
+        <span id="version"></span>
+      </div>
+    </section>
+  </div>
+
+  <script src="audio/engine.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{
+  "name": "focus-point",
+  "productName": "Focus Point",
+  "version": "1.0.0",
+  "description": "A calm break reminder: every so often it covers your screen and makes you rest, with rain and dreamy ambient sounds.",
+  "main": "src/main/main.js",
+  "author": "Nicolas",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --fast",
+    "icons": "node scripts/make-icons.js",
+    "dist": "electron-builder --win nsis --publish never",
+    "dist:portable": "electron-builder --win portable --publish never",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.focuspoint.app",
+    "productName": "Focus Point",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Focus Point"
+    }
+  }
+}

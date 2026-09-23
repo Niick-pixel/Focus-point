@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en" data-theme="night">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' file: blob:; img-src 'self' data:" />
+  <title>Rest</title>
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="break.css" />
+</head>
+<body>
+  <div class="backdrop">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+    <div class="stars"></div>
+  </div>
+
+  <main id="stage">
+    <p class="eyebrow" id="eyebrow">Time to rest</p>
+
+    <div class="breath" id="breath">
+      <div class="ring"></div>
+      <div class="orb"></div>
+      <span class="breath-label" id="breathLabel">Breathe in</span>
+    </div>
+
+    <div class="time" id="time">0:00</div>
+    <p class="tip" id="tip"></p>
+
+    <div class="actions" id="actions">
+      <button class="btn" id="snooze" hidden>Snooze 5 min</button>
+      <button class="btn" id="skip" hidden>Skip</button>
+    </div>
+    <div class="actions" id="backActions" hidden>
+      <button class="btn primary" id="back">I'm back</button>
+    </div>
+  </main>
+
+  <button class="mute" id="mute" title="Mute" hidden aria-label="Mute sound">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9v6h4l5 4V5L8 9H4z"/>
+      <path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>
+      <path class="cross" d="M17 9l5 6M22 9l-5 6"/>
+    </svg>
+  </button>
+
+  <div class="progress"><div class="bar" id="bar"></div></div>
+
+  <script src="audio/engine.js"></script>
+  <script src="break.js"></script>
+</body>
+</html>
