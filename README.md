@@ -32,7 +32,7 @@ Download the latest **`FocusPoint-Setup-x.y.z.exe`** from the [Releases page](ht
 
 > Windows SmartScreen may warn you because the app isn't code-signed. Click *More info → Run anyway*.
 
-**Publishing a new version:** bump `version` in `package.json`, commit, then push a matching tag (e.g. `git tag v1.5.0 && git push origin v1.5.0`). The *Build Windows app* workflow builds the installer and attaches it, together with the `latest.yml` update manifest, to a GitHub Release. Every installed copy picks it up within a few hours.
+**Publishing a new version:** bump `version` in `package.json` and get it onto `main` (merge a pull request). The *Build Windows app* workflow notices that version has no release yet, builds the installer, creates the `vX.Y.Z` tag and a GitHub Release, and attaches the installer plus the `latest.yml` update manifest. Every installed copy picks it up within a few hours.
 
 ## Run from source
 
