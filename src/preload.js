@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('api', {
   // audio
   pickAudio: () => ipcRenderer.invoke('audio:pick'),
   audioUrls: (paths) => ipcRenderer.invoke('audio:urls', paths),
+  loadSound: (name) => ipcRenderer.invoke('audio:asset', name),
   onPreviewStop: on('preview:stop'),
 
   // break overlay
@@ -43,4 +44,8 @@ contextBridge.exposeInMainWorld('api', {
   onBreakClosing: on('break:closing'),
 
   appInfo: () => ipcRenderer.invoke('app:info'),
+  updateState: () => ipcRenderer.invoke('update:state'),
+  checkForUpdates: () => ipcRenderer.send('update:check'),
+  installUpdate: () => ipcRenderer.send('update:install'),
+  onUpdate: on('update:status'),
 });

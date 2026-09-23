@@ -9,11 +9,13 @@ const { RestTimer } = require('./timer');
 const { createDetector } = require('./fullscreen');
 const { Stats } = require('./stats');
 const { createKeyBlocker } = require('./keyblock');
+const { createUpdater } = require('./updater');
 
 const FAST = process.argv.includes('--fast'); // dev: "minutes" become seconds
 const START_HIDDEN = process.argv.includes('--hidden');
 const ASSETS = path.join(__dirname, '..', '..', 'assets');
 const RENDERER = path.join(__dirname, '..', 'renderer');
+const BUNDLED_SOUNDS = new Set(['rain']);
 
 // Title-bar colors for each theme (must match the CSS themes).
 const THEMES = {
@@ -39,6 +41,8 @@ let overlays = [];
 let quitting = false;
 let lastTrayLabel = '';
 let keyBlocker;
+let updater;
+let alternateTurn = 0; // 'alternate' activity: breathe, eyes, breathe, ...
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -151,6 +155,9 @@ function openOverlays(info) {
   const primaryId = screen.getPrimaryDisplay().id;
   const strict = !!s.strictMode;
   if (strict) keyBlocker.start();
+  const activity = s.breakActivity === 'alternate'
+    ? (alternateTurn++ % 2 ? 'eyes' : 'breathe')
+    : s.breakActivity || 'breathe';
 
   // Stop the settings preview so sounds don't double up.
   if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('preview:stop');
@@ -184,7 +191,7 @@ function openOverlays(info) {
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     win.loadFile(path.join(RENDERER, 'break.html'));
 
-    win.on('close', (e) => { if (!win.__allowClose) e.preventDefault(); });
+    win.on('close', (e) => { if (!win.__allowClose && !quitting) e.preventDefault(); });
 
     // Keep the break in front: if focus leaves every overlay, pull it back.
     win.on('blur', () => {
@@ -209,7 +216,8 @@ function openOverlays(info) {
         allowSkip: s.allowSkip && !strict,
         allowSnooze: s.allowSnooze && !strict,
         snoozeMinutes: s.snoozeMinutes,
-        showBreathing: s.showBreathing,
+        // The dot routine runs on the primary screen; other screens show the breathing orb.
+        activity: activity === 'eyes' && !primary ? 'breathe' : activity,
         sound: primary && s.soundEnabled
           ? { master: s.masterVolume, mix: s.mix, customUrls: fileUrls(s.customFiles), shuffle: s.customShuffle }
           : null,
@@ -270,6 +278,9 @@ function buildTrayMenu(state) {
           ],
         },
     { type: 'separator' },
+    ...(updater?.state().status === 'ready'
+      ? [{ label: `Restart to update to v${updater.state().version}`, click: () => installUpdate() }]
+      : []),
     { label: 'This week\'s rest…', click: () => openSettings('stats') },
     { label: 'Settings…', click: () => openSettings() },
     { label: 'Quit Focus Point', click: () => { quitting = true; app.quit(); } },
@@ -289,10 +300,34 @@ function updateTray(state) {
   const label = trayLabel(state);
   tray.setToolTip(`Focus Point — ${label}`);
   // Rebuild the menu only when its text changes (avoids closing an open menu every second).
-  const key = `${label}|${state.phase}`;
+  const key = `${label}|${state.phase}|${updater?.state().status}`;
   if (key !== lastTrayLabel) {
     lastTrayLabel = key;
     tray.setContextMenu(buildTrayMenu(state));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Updates
+
+function installUpdate() {
+  quitting = true;
+  keyBlocker?.stop();
+  stats?.save();
+  updater.install();
+}
+
+function onUpdateChange(state) {
+  broadcast('update:status', state);
+  lastTrayLabel = ''; // rebuild the tray menu (adds/removes the restart item)
+  updateTray(timer.state());
+  if (state.status === 'ready' && Notification.isSupported()) {
+    new Notification({
+      title: `Focus Point ${state.version} is ready`,
+      body: 'It installs the next time you quit. Or restart now from the tray menu.',
+      icon: path.join(ASSETS, 'icon.png'),
+      silent: true,
+    }).show();
   }
 }
 
@@ -325,6 +360,9 @@ function registerIpc() {
     stats.clear();
     broadcast('stats:changed');
   });
+  ipcMain.handle('update:state', () => updater.state());
+  ipcMain.on('update:check', () => updater.check());
+  ipcMain.on('update:install', () => installUpdate());
   ipcMain.handle('app:info', () => ({ version: app.getVersion(), fast: FAST, platform: process.platform }));
 
   ipcMain.on('timer:breakNow', () => timer.breakNow());
@@ -356,6 +394,10 @@ function registerIpc() {
     return res.canceled ? [] : res.filePaths;
   });
   ipcMain.handle('audio:urls', (_e, paths) => fileUrls(paths));
+  ipcMain.handle('audio:asset', (_e, name) => {
+    if (!BUNDLED_SOUNDS.has(name)) throw new Error(`Unknown sound: ${name}`);
+    return require('fs').promises.readFile(path.join(ASSETS, 'sounds', `${name}.ogg`));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -403,10 +445,13 @@ app.whenReady().then(() => {
   stats = new Stats(app.getPath('userData'));
   stats.attach(timer, () => broadcast('stats:changed'));
 
+  updater = createUpdater({ app, getSettings: () => store.get(), onChange: onUpdateChange });
+
   registerIpc();
   applyLoginItem(store.get().launchAtLogin);
   timer.start();
   createTray();
+  updater.start();
 
   if (!START_HIDDEN) openSettings();
 });

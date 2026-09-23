@@ -1,6 +1,6 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-const engine = new window.SoundEngine();
+const engine = new window.SoundEngine({ loadAsset: (name) => window.api.loadSound(name) });
 
 let settings = null;
 let previewing = false;
@@ -81,6 +81,17 @@ function render() {
     }
   }
   for (const el of $$('[data-show-if]')) el.hidden = !settings[el.dataset.showIf];
+  for (const group of $$('[data-choice-key]')) {
+    const value = settings[group.dataset.choiceKey];
+    for (const b of $$('button', group)) b.setAttribute('aria-checked', String(b.dataset.value === value));
+  }
+  const hints = {
+    breathe: 'A slow 4 · 2 · 6 breathing orb.',
+    eyes: 'Follow a dot around the screen, then shift focus near and far. Relaxes tired eye muscles.',
+    alternate: 'Breathing on one break, eye exercises on the next.',
+    none: 'Just the countdown and your tip.',
+  };
+  $('#activityHint').textContent = hints[settings.breakActivity] || '';
   for (const el of $$('[data-disabled-if]')) el.classList.toggle('disabled', !!settings[el.dataset.disabledIf]);
 
   const tips = $('#tips');
@@ -141,6 +152,15 @@ function wireControls() {
           if (key === 'masterVolume') engine.setMaster(v);
           else if (key.startsWith('mix.')) engine.setMix({ [key.slice(4)]: v });
         }
+      });
+    }
+  }
+
+  for (const group of $$('[data-choice-key]')) {
+    for (const b of $$('button', group)) {
+      b.addEventListener('click', () => {
+        save(group.dataset.choiceKey, b.dataset.value, 0);
+        render();
       });
     }
   }
@@ -291,6 +311,24 @@ function renderState(state) {
   clock.classList.toggle('word', !/\d/.test(clock.textContent));
 }
 
+// ---- updates ----------------------------------------------------------------
+
+function renderUpdate(u) {
+  const text = {
+    dev: 'Running from source — updates come from git',
+    idle: 'New versions download in the background',
+    checking: 'Checking for updates…',
+    'up-to-date': 'You have the latest version',
+    downloading: `Downloading v${u.version}… ${u.progress}%`,
+    ready: `Version ${u.version} is ready to install`,
+    error: `Couldn't check for updates${u.error ? ` (${u.error})` : ''}`,
+  }[u.status];
+  $('#updateStatus').textContent = text || '';
+  $('#checkUpdates').disabled = ['dev', 'checking', 'downloading', 'ready'].includes(u.status);
+  $('#installUpdate').hidden = u.status !== 'ready';
+  if (u.status === 'ready') $('#installUpdate').textContent = `Restart to update to v${u.version}`;
+}
+
 // ---- boot -------------------------------------------------------------------
 
 (async () => {
@@ -306,6 +344,11 @@ function renderState(state) {
     settings = s;
     render();
   });
+  renderUpdate(await api.updateState());
+  api.onUpdate(renderUpdate);
+  $('#checkUpdates').addEventListener('click', () => api.checkForUpdates());
+  $('#installUpdate').addEventListener('click', () => api.installUpdate());
+
   const info = await api.appInfo();
   if (info.platform !== 'win32') {
     for (const el of $$('[data-windows-only]')) el.remove();

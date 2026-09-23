@@ -1,6 +1,7 @@
 // Focus Point sound engine: calm ambiences synthesized in real time with the Web Audio API.
 // No audio files needed. Each layer is built from filtered noise and oscillators:
-//   rain  – pink noise "hiss" + a low rumble + thousands of tiny randomized droplets
+//   rain  – a real CC0 field recording (assets/sounds/rain.ogg), softened and looped seamlessly;
+//           falls back to synthesized rain (pink hiss + rumble + droplets) if it can't load
 //   ocean – brown noise swelling in slow waves, with a bright "foam" wash on each crest
 //   wind  – white noise through a drifting band-pass filter (the "whistle" wanders)
 //   fire  – deep brown-noise roar + random crackles and pops
@@ -51,11 +52,16 @@
     return buf;
   }
 
+  // Raw bytes of bundled recordings, shared by every engine in this window.
+  const assetCache = new Map();
+
   const midiToHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
   const rand = (a, b) => a + Math.random() * (b - a);
 
   class SoundEngine {
-    constructor() {
+    /** @param {{ loadAsset?: (name: string) => Promise<Uint8Array> }} opts */
+    constructor({ loadAsset } = {}) {
+      this.loadAsset = loadAsset || null;
       this.ctx = null;
       this.master = null;
       this.layers = {};
@@ -198,6 +204,19 @@
       slot.id = setTimeout(loop, rand(minMs, maxMs));
     }
 
+    /** Decode a bundled recording for the current context. */
+    async #asset(name) {
+      const ctx = this.ctx;
+      if (!assetCache.has(name)) {
+        assetCache.set(name, this.loadAsset(name).catch((err) => {
+          assetCache.delete(name);
+          throw err;
+        }));
+      }
+      const bytes = await assetCache.get(name);
+      return ctx.decodeAudioData(new Uint8Array(bytes).buffer); // copy: decoding detaches the buffer
+    }
+
     #pan(value) {
       const p = this.ctx.createStereoPanner();
       p.pan.value = value;
@@ -208,8 +227,35 @@
 
     #builders = {
       rain: () => {
-        const ctx = this.ctx;
         const out = this.#gain(0);
+        const session = this.session;
+        let stopInner = () => {};
+        const synth = () => { stopInner = this.#builders.rainSynth(out).stop; };
+        const alive = () => this.running && this.session === session;
+        if (!this.loadAsset) {
+          synth();
+          return { out, stop: () => stopInner() };
+        }
+        this.#asset('rain').then((buffer) => {
+          if (!alive()) return;
+          const src = this.ctx.createBufferSource();
+          src.buffer = buffer;
+          src.loop = true;
+          const fade = this.#gain(0);
+          src.connect(fade).connect(this.#gain(2.0)).connect(out);
+          this.#ramp(fade.gain, 1, 1.5);
+          const drift = this.#lfo(0.037, 0.1, fade.gain); // barely-there swell so the loop never feels static
+          src.start(0, rand(0, buffer.duration));
+          stopInner = () => { src.stop(); drift.stop(); };
+        }).catch((err) => {
+          console.warn('Rain recording unavailable, using synthesized rain:', err);
+          if (alive()) synth();
+        });
+        return { out, stop: () => stopInner() };
+      },
+
+      rainSynth: (out = this.#gain(0)) => {
+        const ctx = this.ctx;
         const nodes = [];
 
         // Body of the rain: soft pink hiss

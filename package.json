@@ -1,7 +1,7 @@
 {
   "name": "focus-point",
   "productName": "Focus Point",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A calm break reminder: every so often it covers your screen and makes you rest, with rain and dreamy ambient sounds.",
   "main": "src/main/main.js",
   "author": "Nicolas",
@@ -40,13 +40,27 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "Focus Point"
+      "shortcutName": "Focus Point",
+      "artifactName": "FocusPoint-Setup-${version}.${ext}"
     },
     "asarUnpack": [
-      "node_modules/koffi/**"
+      "node_modules/koffi/**",
+      "node_modules/@koromix/**"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Niick-pixel",
+        "repo": "Focus-purpose"
+      }
     ]
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "koffi": "^3.3.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Niick-pixel/Focus-purpose.git"
   }
 }
