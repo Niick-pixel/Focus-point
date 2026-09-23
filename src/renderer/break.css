@@ -176,6 +176,36 @@ main {
   transition: width 1s linear;
 }
 
+.emergency {
+  position: fixed;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  opacity: 0.55;
+  transition: opacity .3s;
+}
+.emergency.holding { opacity: 1; color: var(--text); }
+.emergency-track {
+  width: 140px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.emergency-track i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .blob, .stars { animation: none; }
 }

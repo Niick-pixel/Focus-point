@@ -81,6 +81,7 @@ function render() {
     }
   }
   for (const el of $$('[data-show-if]')) el.hidden = !settings[el.dataset.showIf];
+  for (const el of $$('[data-disabled-if]')) el.classList.toggle('disabled', !!settings[el.dataset.disabledIf]);
 
   const tips = $('#tips');
   if (document.activeElement !== tips) tips.value = (settings.tips || []).join('\n');
@@ -88,6 +89,7 @@ function render() {
   for (const b of $$('[data-theme-choice]')) b.classList.toggle('active', b.dataset.themeChoice === settings.theme);
 
   renderFiles();
+  if (typeof renderZones === 'function') renderZones();
 }
 
 function renderFiles() {
@@ -128,6 +130,7 @@ function wireControls() {
       input.addEventListener('change', () => {
         save(key, input.checked, 0);
         for (const el of $$(`[data-show-if="${key}"]`)) el.hidden = !input.checked;
+        for (const el of $$(`[data-disabled-if="${key}"]`)) el.classList.toggle('disabled', input.checked);
       });
     } else {
       input.addEventListener('input', () => {
@@ -233,6 +236,7 @@ async function togglePreview() {
 // ---- live status ------------------------------------------------------------
 
 const CIRC = 2 * Math.PI * 54;
+const timeFmt = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
 function renderState(state) {
   const clock = $('#clock');
@@ -271,10 +275,17 @@ function renderState(state) {
       break;
     case 'deferred':
       clock.textContent = 'Waiting';
-      caption.textContent = 'break after you exit fullscreen';
+      caption.textContent = state.deferReason === 'zone' && state.zone
+        ? `break after ${timeFmt.format(state.zone.endsAt)}`
+        : 'break after you exit fullscreen';
       progress = 0;
       break;
   }
+  const pill = $('#zonePill');
+  const showZone = state.zone && (state.phase === 'working' || state.phase === 'deferred');
+  pill.hidden = !showZone;
+  if (showZone) pill.textContent = `${state.zone.label} · breaks resume at ${timeFmt.format(state.zone.endsAt)}`;
+
   ring.style.strokeDashoffset = String(CIRC * (1 - progress));
   ring.style.opacity = progress > 0 ? '1' : '0';
   clock.classList.toggle('word', !/\d/.test(clock.textContent));

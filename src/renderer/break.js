@@ -45,6 +45,8 @@ window.api.onBreakStart((payload) => {
   $('snooze').hidden = !payload.allowSnooze;
   $('snooze').textContent = `Snooze ${payload.snoozeMinutes} min`;
 
+  $('emergency').hidden = !payload.strict;
+
   $('breath').hidden = !payload.showBreathing;
   if (payload.showBreathing) setTimeout(() => breathe(0), 600);
 
@@ -87,9 +89,40 @@ $('mute').addEventListener('click', () => {
   engine.setMaster(muted ? 0 : info.sound.master);
 });
 
+// Strict mode's emergency exit: hold Esc for 5 seconds.
+const EMERGENCY_MS = 5000;
+let holdStart = 0;
+let holdFrame = 0;
+
+function holdTick() {
+  const p = Math.min(1, (performance.now() - holdStart) / EMERGENCY_MS);
+  $('emergencyFill').style.width = `${p * 100}%`;
+  if (p >= 1) {
+    cancelHold();
+    $('emergencyText').textContent = 'Ending break…';
+    window.api.skip();
+    return;
+  }
+  holdFrame = requestAnimationFrame(holdTick);
+}
+
+function cancelHold() {
+  cancelAnimationFrame(holdFrame);
+  holdStart = 0;
+  $('emergency').classList.remove('holding');
+  $('emergencyFill').style.width = '0%';
+}
+
 // Swallow shortcuts that could close or reload the overlay.
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' || (e.ctrlKey && ['r', 'w'].includes(e.key.toLowerCase())) || e.key === 'F5') {
     e.preventDefault();
   }
+  if (e.key === 'Escape' && info?.strict && !holdStart) {
+    holdStart = performance.now();
+    $('emergency').classList.add('holding');
+    holdFrame = requestAnimationFrame(holdTick);
+  }
 });
+window.addEventListener('keyup', (e) => { if (e.key === 'Escape') cancelHold(); });
+window.addEventListener('blur', cancelHold);

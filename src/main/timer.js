@@ -6,8 +6,10 @@
 //   waiting   – break finished, waiting for the user to click "I'm back" (confirmEnd)
 //   paused    – user paused reminders (optionally until a time)
 //   away      – user is idle / screen locked; the work timer restarts when they return
-//   deferred  – a break is due but a fullscreen game/video/presentation is in front; it waits
+//   deferred  – a break is due but is being held: a fullscreen game/video/presentation is in
+//               front, or you're inside a break zone (a meeting, class, …); it waits
 const { EventEmitter } = require('events');
+const { activeZone } = require('./zones');
 
 class RestTimer extends EventEmitter {
   /**
@@ -23,6 +25,7 @@ class RestTimer extends EventEmitter {
     this.idleSeconds = opts.idleSeconds ?? (() => 0);
     this.isFullscreen = opts.isFullscreen ?? (() => false);
     this.deferredSince = 0;
+    this.deferReason = null; // 'fullscreen' | 'zone'
 
     this.phase = 'working';
     this.endsAt = 0;          // end of the current work block or break
@@ -154,21 +157,22 @@ class RestTimer extends EventEmitter {
 
     switch (this.phase) {
       case 'working': {
-        const fullscreen = s.holdForFullscreen && this.isFullscreen();
+        const hold = this.holdReason(s, now);
         // Idle long enough? You were already resting: restart the work block when you return.
         // (Not while fullscreen: a controller or a movie doesn't register as input.)
-        if (!fullscreen && s.idleResetMinutes > 0 && this.idleSeconds() * 1000 >= s.idleResetMinutes * this.unitMs) {
+        if (hold !== 'fullscreen' && s.idleResetMinutes > 0 && this.idleSeconds() * 1000 >= s.idleResetMinutes * this.unitMs) {
           this.phase = 'away';
           break;
         }
         const left = this.endsAt - now;
-        if (!fullscreen && !this.warned && s.warningSeconds > 0 && left <= s.warningSeconds * 1000 && left > 0) {
+        if (!hold && !this.warned && s.warningSeconds > 0 && left <= s.warningSeconds * 1000 && left > 0) {
           this.warned = true;
           this.emit('warning', { secondsLeft: Math.round(left / 1000) });
         }
         if (left <= 0) {
-          if (fullscreen) {
+          if (hold) {
             this.phase = 'deferred';
+            this.deferReason = hold;
             this.deferredSince = now;
           } else {
             this.startBreak();
@@ -177,12 +181,14 @@ class RestTimer extends EventEmitter {
         break;
       }
       case 'deferred': {
-        const stillFullscreen = s.holdForFullscreen && this.isFullscreen();
-        const maxWait = s.fullscreenMaxWaitMinutes > 0 ? s.fullscreenMaxWaitMinutes * this.unitMs : Infinity;
+        const hold = this.holdReason(s, now);
+        this.deferReason = hold || this.deferReason;
+        // The max wait only applies to fullscreen apps; zones end on their own.
+        const maxWait = hold === 'fullscreen' && s.fullscreenMaxWaitMinutes > 0 ? s.fullscreenMaxWaitMinutes * this.unitMs : Infinity;
         if (now - this.deferredSince >= maxWait) {
           this.startBreak();
-        } else if (!stillFullscreen) {
-          // Game closed: give a heads-up, then the break follows shortly.
+        } else if (!hold) {
+          // Game closed / zone over: give a heads-up, then the break follows shortly.
           this.startWork(Math.max(10, s.warningSeconds) * 1000);
           this.warned = false;
         }
@@ -199,6 +205,13 @@ class RestTimer extends EventEmitter {
         break;
     }
     this.emitState();
+  }
+
+  /** Why a due break should wait right now, or null. Zones win over fullscreen for display. */
+  holdReason(s, now) {
+    if (activeZone(s.zones, now)) return 'zone';
+    if (s.holdForFullscreen && this.isFullscreen()) return 'fullscreen';
+    return null;
   }
 
   // ---- views --------------------------------------------------------------
@@ -225,10 +238,13 @@ class RestTimer extends EventEmitter {
           : null;
     const s = this.getSettings();
     const nextIndex = this.breaksTaken + 1;
+    const zone = activeZone(s.zones, now);
     return {
       phase: this.phase,
       remainingMs,
       deferredMs: this.phase === 'deferred' ? now - this.deferredSince : null,
+      deferReason: this.phase === 'deferred' ? this.deferReason : null,
+      zone: zone ? { label: zone.zone.label || 'Break zone', endsAt: zone.endsAt } : null,
       totalMs,
       breaksTaken: this.breaksTaken,
       nextIsLong: s.longBreakEnabled && nextIndex % s.longBreakEvery === 0,

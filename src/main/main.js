@@ -8,6 +8,7 @@ const { Store } = require('./store');
 const { RestTimer } = require('./timer');
 const { createDetector } = require('./fullscreen');
 const { Stats } = require('./stats');
+const { createKeyBlocker } = require('./keyblock');
 
 const FAST = process.argv.includes('--fast'); // dev: "minutes" become seconds
 const START_HIDDEN = process.argv.includes('--hidden');
@@ -37,6 +38,7 @@ let settingsWin = null;
 let overlays = [];
 let quitting = false;
 let lastTrayLabel = '';
+let keyBlocker;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,6 +49,8 @@ const fmt = (ms) => {
   const s = total % 60;
   return m >= 1 ? `${m} min` : `${s}s`;
 };
+
+const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 function broadcast(channel, payload) {
   for (const w of BrowserWindow.getAllWindows()) {
@@ -135,6 +139,7 @@ function destroyWindows(list) {
 }
 
 function destroyOverlays() {
+  keyBlocker?.stop();
   destroyWindows(overlays);
   overlays = [];
 }
@@ -144,6 +149,8 @@ function openOverlays(info) {
   const s = store.get();
   const tip = pickTip(s);
   const primaryId = screen.getPrimaryDisplay().id;
+  const strict = !!s.strictMode;
+  if (strict) keyBlocker.start();
 
   // Stop the settings preview so sounds don't double up.
   if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('preview:stop');
@@ -198,8 +205,9 @@ function openOverlays(info) {
         primary,
         tip,
         theme: s.theme,
-        allowSkip: s.allowSkip,
-        allowSnooze: s.allowSnooze,
+        strict,
+        allowSkip: s.allowSkip && !strict,
+        allowSnooze: s.allowSnooze && !strict,
         snoozeMinutes: s.snoozeMinutes,
         showBreathing: s.showBreathing,
         sound: primary && s.soundEnabled
@@ -219,6 +227,7 @@ function closeOverlays() {
   if (!overlays.length) return;
   const closing = overlays;
   overlays = [];
+  keyBlocker.stop();
   for (const w of closing) if (!w.isDestroyed()) w.webContents.send('break:closing');
   setTimeout(() => destroyWindows(closing), 1600); // let the fade-out finish
 }
@@ -233,7 +242,10 @@ function trayLabel(state) {
     case 'waiting': return 'Break finished';
     case 'paused': return state.remainingMs != null ? `Paused — ${fmt(state.remainingMs)} left` : 'Paused';
     case 'away': return 'Away — timer restarts when you return';
-    case 'deferred': return 'Break waiting — fullscreen app open';
+    case 'deferred':
+      return state.deferReason === 'zone' && state.zone
+        ? `${state.zone.label} — breaks resume at ${clock(state.zone.endsAt)}`
+        : 'Break waiting — fullscreen app open';
     default: return 'Focus Point';
   }
 }
@@ -387,6 +399,7 @@ app.whenReady().then(() => {
   powerMonitor.on('unlock-screen', () => timer.comeBack());
   powerMonitor.on('resume', () => timer.comeBack());
 
+  keyBlocker = createKeyBlocker();
   stats = new Stats(app.getPath('userData'));
   stats.attach(timer, () => broadcast('stats:changed'));
 
@@ -401,6 +414,7 @@ app.whenReady().then(() => {
 app.on('second-instance', () => app.whenReady().then(() => openSettings()));
 app.on('before-quit', () => {
   quitting = true;
+  keyBlocker?.stop();
   stats?.save();
 });
 app.on('window-all-closed', () => { /* keep running in the tray */ });

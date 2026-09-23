@@ -407,3 +407,76 @@ textarea:focus { outline: none; border-color: var(--accent); }
 }
 .tile-label { font-size: 12px; color: var(--muted); }
 .tile-value { font-size: 20px; font-weight: 300; margin-top: 4px; }
+
+/* ---- Strict mode -------------------------------------------------------- */
+.row.disabled { opacity: 0.4; pointer-events: none; }
+
+/* ---- Break zones -------------------------------------------------------- */
+.zones { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.zones-head { margin-bottom: 12px; }
+.zone {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px 12px;
+  margin-bottom: 8px;
+  transition: opacity .2s;
+}
+.zone.off { opacity: 0.5; }
+.zone-top { display: flex; align-items: center; gap: 10px; }
+.zone-label {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 0;
+  user-select: text;
+}
+.zone-label:focus { outline: none; border-bottom-color: var(--accent); }
+.zone-label::placeholder { color: var(--muted); }
+.zone-remove {
+  border: 0; background: transparent; color: var(--muted);
+  font-size: 18px; line-height: 1; padding: 2px 4px;
+}
+.zone-remove:hover { color: var(--text); }
+.zone-times { display: flex; align-items: center; gap: 8px; margin: 8px 0 10px; font-size: 13px; color: var(--muted); }
+.zone-times input {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.zone-times input:focus { outline: none; border-color: var(--accent); }
+.zone-times .overnight { font-size: 11px; }
+.zone-days { display: flex; gap: 4px; }
+.zone-days button {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 5px 0;
+  font-size: 12px;
+  transition: all .15s;
+}
+.zone-days button[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--accent-ink); font-weight: 600; }
+.add-zone { width: 100%; border-style: dashed; color: var(--muted); }
+.add-zone:hover { color: var(--text); }
+
+.zone-pill {
+  margin-top: -6px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+}

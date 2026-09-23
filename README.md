@@ -15,6 +15,8 @@ A calm break reminder for Windows. Every so often (45 minutes by default) it gen
 - **Your own music.** Add MP3/WAV/OGG/FLAC/M4A files. They're shuffled and mixed with the ambient layers.
 - **Customizable rhythm.** Choose how long you work and rest, add a longer break every N breaks, and get a heads-up notification before each break.
 - **Soft or strict.** Skip and Snooze buttons are optional. You can also turn on "Wait for me" so work doesn't restart until you click *I'm back*.
+- **Strict mode.** No Skip or Snooze, and during a break Alt+Tab, the Windows key, Alt+Esc, Ctrl+Esc, Alt+F4 and Alt+Space are blocked. For an emergency, hold **Esc for 5 seconds**. Ctrl+Alt+Del and Task Manager (Ctrl+Shift+Esc) always work, and the block releases after 2 hours no matter what.
+- **Break zones.** Set time ranges when you need to be present (meetings, classes, calls), e.g. *Team meeting, Mon–Fri 14:00–15:30*. Zones can run past midnight. Breaks never pop up inside a zone: the timer keeps counting, and a break that came due follows shortly after the zone ends.
 - **Never interrupts your games.** If a fullscreen game, video or presentation is in front when a break is due, the break waits. Exclusive and borderless-windowed games both count. When you exit, you get a short heads-up and then the break. You can also set a maximum wait if you want a guaranteed break.
 - **Knows when you're away.** Locking the screen, sleep, or being idle for X minutes counts as resting, and the timer starts fresh when you return.
 - **Weekly stats.** See how much you rested each day this week, compared with the same point last week. Also shows breaks taken vs skipped, screen time, and rest per screen hour. Browse past weeks, or switch to a table view. History stays on your computer.
@@ -48,6 +50,8 @@ npm run dist       # build the Windows installer into dist/ (run on Windows)
 | App shell: tray, windows, overlays on every display, notifications | `src/main/main.js` |
 | Fullscreen game/video detection (Win32 APIs via koffi) | `src/main/fullscreen.js` |
 | Rest history (per-day totals in `stats.json`) | `src/main/stats.js`, `src/renderer/stats-view.js` |
+| Strict mode keyboard hook (`WH_KEYBOARD_LL`) | `src/main/keyblock.js` |
+| Break zones (time ranges that hold breaks) | `src/main/zones.js`, `src/renderer/zones-view.js` |
 | Settings saved to `%APPDATA%/Focus Point/settings.json` | `src/main/store.js` |
 | Sound synthesizer (Web Audio API) | `src/renderer/audio/engine.js` |
 | Settings UI | `src/renderer/settings.*` |

@@ -9,8 +9,10 @@ const DEFAULTS = {
   longBreakEnabled: true,
   longBreakEvery: 4, // every Nth break is a long one
   longBreakMinutes: 10,
+  zones: [], // break zones: [{ id, label, days: [0-6], start: 'HH:MM', end: 'HH:MM', enabled }]
 
   // Break screen
+  strictMode: false, // no skip/snooze, Alt+Tab & Windows key blocked (hold Esc 5 s = emergency exit)
   allowSkip: true,
   allowSnooze: true,
   snoozeMinutes: 5,

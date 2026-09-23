@@ -25,6 +25,7 @@
         <div class="caption" id="caption">until your break</div>
       </div>
     </div>
+    <div class="zone-pill" id="zonePill" hidden></div>
     <div class="hero-actions">
       <button class="btn primary" id="breakNow">Break now</button>
       <button class="btn" id="pauseBtn">Pause</button>
@@ -70,15 +71,27 @@
         <div class="field-head"><label>Heads-up before a break</label><output data-for="warningSeconds"></output></div>
         <input type="range" min="0" max="120" step="10" data-key="warningSeconds" data-fmt="sec" />
       </div>
+
+      <div class="zones">
+        <div class="zones-head">
+          <div><label>Break zones</label><small>Hours when you need to be present. Breaks wait until the zone ends.</small></div>
+        </div>
+        <div id="zoneList"></div>
+        <button class="btn add-zone" id="addZone">+ Add a zone</button>
+      </div>
     </section>
 
     <!-- Break -->
     <section class="panel" data-panel="break">
       <div class="row">
+        <div><label>Strict mode</label><small>No skip or snooze. Alt+Tab, the Windows key and Alt+F4 are blocked during breaks. Emergency exit: hold Esc for 5 seconds.</small></div>
+        <label class="switch"><input type="checkbox" data-key="strictMode" /><span></span></label>
+      </div>
+      <div class="row" data-disabled-if="strictMode">
         <div><label>Allow skipping</label><small>Show a Skip button on the break screen</small></div>
         <label class="switch"><input type="checkbox" data-key="allowSkip" /><span></span></label>
       </div>
-      <div class="row">
+      <div class="row" data-disabled-if="strictMode">
         <div><label>Allow snoozing</label><small>Push the break back a few minutes</small></div>
         <label class="switch"><input type="checkbox" data-key="allowSnooze" /><span></span></label>
       </div>
@@ -244,6 +257,7 @@
 
   <script src="audio/engine.js"></script>
   <script src="settings.js"></script>
+  <script src="zones-view.js"></script>
   <script src="stats-view.js"></script>
 </body>
 </html>
