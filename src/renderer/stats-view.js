@@ -9,7 +9,7 @@
 
   const pad = (n) => String(n).padStart(2, '0');
   const keyOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const empty = { restMs: 0, workMs: 0, completed: 0, skipped: 0, snoozed: 0 };
+  const empty = { restMs: 0, workMs: 0, completed: 0, skipped: 0, snoozed: 0, standMs: 0, stands: 0 };
 
   function fmtDur(ms) {
     const min = Math.round(ms / 60000);
@@ -75,6 +75,7 @@
   function describe(d) {
     const parts = [`${fmtDur(d.restMs)} rested`, `${d.completed} break${d.completed === 1 ? '' : 's'}`];
     if (d.skipped + d.snoozed) parts.push(`${d.skipped + d.snoozed} skipped or snoozed`);
+    if (d.standMs) parts.push(`${fmtDur(d.standMs)} standing`);
     return `${longFmt.format(d.date)} · ${parts.join(' · ')}`;
   }
 
@@ -144,8 +145,8 @@
     for (const d of list) {
       const tr = document.createElement('tr');
       const cells = d.isFuture
-        ? [weekdayFmt.format(d.date), '—', '—', '—', '—']
-        : [weekdayFmt.format(d.date), fmtDur(d.restMs), d.completed, d.skipped + d.snoozed, fmtDur(d.workMs)];
+        ? [weekdayFmt.format(d.date), '—', '—', '—', '—', '—']
+        : [weekdayFmt.format(d.date), fmtDur(d.restMs), d.completed, d.skipped + d.snoozed, fmtDur(d.standMs), fmtDur(d.workMs)];
       for (const c of cells) {
         const td = document.createElement('td');
         td.textContent = c;
@@ -161,6 +162,8 @@
     $('#tileBreaks').textContent = sum(list, 'completed');
     $('#tileSkipped').textContent = sum(list, 'skipped') + sum(list, 'snoozed');
     $('#tileScreen').textContent = fmtDur(work);
+    $('#tileStand').textContent = fmtDur(sum(list, 'standMs'));
+    $('#tileStands').textContent = sum(list, 'stands');
     $('#tileRatio').textContent = work >= 10 * 60000 ? `${fmtDur((rest / work) * 3600000)}` : '—';
   }
 

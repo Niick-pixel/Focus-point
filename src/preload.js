@@ -26,6 +26,20 @@ contextBridge.exposeInMainWorld('api', {
   restart: () => ipcRenderer.send('timer:restart'),
   pauseMenu: () => ipcRenderer.send('menu:pause'),
 
+  // standing desk
+  getStandState: () => ipcRenderer.invoke('stand:state'),
+  onStandState: on('stand:state'),
+  onStandMode: on('stand:mode'),
+  onStandClosing: on('stand:closing'),
+  standNow: () => ipcRenderer.send('stand:now'),
+  standUp: () => ipcRenderer.send('stand:up'),
+  standNotNow: () => ipcRenderer.send('stand:notNow'),
+  standSkip: () => ipcRenderer.send('stand:skip'),
+  standExercisesDone: () => ipcRenderer.send('stand:exercisesDone'),
+  standSitNow: () => ipcRenderer.send('stand:sitNow'),
+  standMore: () => ipcRenderer.send('stand:more'),
+  standDown: () => ipcRenderer.send('stand:down'),
+
   // stats
   getStats: () => ipcRenderer.invoke('stats:get'),
   clearStats: () => ipcRenderer.invoke('stats:clear'),

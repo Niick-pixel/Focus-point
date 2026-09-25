@@ -507,3 +507,24 @@ textarea:focus { outline: none; border-color: var(--accent); }
 .update-actions { display: flex; gap: 8px; padding: 10px 0 6px; border-bottom: 1px solid var(--line); }
 .update-actions .btn { font-size: 12px; padding: 7px 14px; }
 .update-actions .btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- Stand ---------------------------------------------------------------- */
+.segmented.three { grid-template-columns: repeat(3, 1fr); }
+#standNow { margin: 8px 0 4px; }
+.hint.disclaimer { opacity: .75; margin-top: 10px; }
+.stand-line {
+  margin-top: -8px;
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stand-line::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: .8;
+}
+.tab { padding: 7px 11px; }

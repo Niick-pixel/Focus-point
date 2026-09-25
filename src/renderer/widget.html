@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" data-theme="night">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>Standing</title>
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="widget.css" />
+</head>
+<body>
+  <div class="pill" id="pill">
+    <div class="ring">
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <circle class="track" cx="20" cy="20" r="17" />
+        <circle class="fill" id="ring" cx="20" cy="20" r="17" />
+      </svg>
+      <!-- tiny standing figure -->
+      <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="5" r="2.2" />
+        <path d="M12 8.5v6.5M12 15l-2.6 5M12 15l2.6 5M8.6 11.2l3.4-1.6 3.4 1.6" />
+      </svg>
+    </div>
+    <div class="text">
+      <span class="label">Standing</span>
+      <span class="time" id="time">15:00</span>
+    </div>
+    <button class="sit" id="sit" title="Sit down now">Sit</button>
+  </div>
+  <script src="widget.js"></script>
+</body>
+</html>

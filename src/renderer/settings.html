@@ -26,6 +26,7 @@
       </div>
     </div>
     <div class="zone-pill" id="zonePill" hidden></div>
+    <div class="stand-line" id="standLine" hidden></div>
     <div class="hero-actions">
       <button class="btn primary" id="breakNow">Break now</button>
       <button class="btn" id="pauseBtn">Pause</button>
@@ -35,6 +36,7 @@
   <nav class="tabs" role="tablist">
     <button class="tab active" data-tab="rhythm" role="tab">Rhythm</button>
     <button class="tab" data-tab="break" role="tab">Break</button>
+    <button class="tab" data-tab="stand" role="tab">Stand</button>
     <button class="tab" data-tab="sound" role="tab">Sound</button>
     <button class="tab" data-tab="stats" role="tab">Stats</button>
     <button class="tab" data-tab="general" role="tab">General</button>
@@ -135,6 +137,36 @@
       </div>
     </section>
 
+    <!-- Stand -->
+    <section class="panel" data-panel="stand">
+      <div class="row">
+        <div><label>Standing reminders</label><small>For standing desks: stand up, move, then sit back down</small></div>
+        <label class="switch"><input type="checkbox" data-key="standEnabled" /><span></span></label>
+      </div>
+      <div class="sub" data-show-if="standEnabled">
+        <div class="field">
+          <div class="field-head"><label>Stand every</label><output data-for="standEveryMinutes"></output></div>
+          <input type="range" min="30" max="180" step="15" data-key="standEveryMinutes" data-fmt="hm" />
+        </div>
+        <div class="field">
+          <div class="field-head"><label>Stay standing for</label><output data-for="standMinutes"></output></div>
+          <input type="range" min="5" max="60" step="5" data-key="standMinutes" data-fmt="min" />
+        </div>
+        <div class="field">
+          <label>When you stand up</label>
+          <div class="segmented three" data-choice-key="standRoutine" role="radiogroup" aria-label="Exercises when you stand">
+            <button data-value="short" role="radio">Short · 3 min</button>
+            <button data-value="full" role="radio">Full · 6 min</button>
+            <button data-value="none" role="radio">No exercises</button>
+          </div>
+          <small class="hint" id="routineHint"></small>
+        </div>
+        <button class="btn" id="standNow">Stand now</button>
+      </div>
+      <small class="hint">Regular breaks wait while you're standing. Break zones and fullscreen apps hold standing reminders too.</small>
+      <small class="hint disclaimer">Gentle exercises for general wellness, not medical advice. If you have pelvic pain, incontinence or recent surgery, check with a pelvic-health physiotherapist first.</small>
+    </section>
+
     <!-- Sound -->
     <section class="panel" data-panel="sound">
       <div class="row">
@@ -217,7 +249,7 @@
       </div>
       <button class="link table-toggle" id="tableToggle">View as table</button>
       <table class="stats-table" id="statsTable" hidden>
-        <thead><tr><th>Day</th><th>Rested</th><th>Breaks</th><th>Skipped</th><th>Screen time</th></tr></thead>
+        <thead><tr><th>Day</th><th>Rested</th><th>Breaks</th><th>Skipped</th><th>Standing</th><th>Screen time</th></tr></thead>
         <tbody></tbody>
       </table>
 
@@ -226,6 +258,8 @@
         <div class="tile"><div class="tile-label">Skipped or snoozed</div><div class="tile-value" id="tileSkipped">0</div></div>
         <div class="tile"><div class="tile-label">Screen time</div><div class="tile-value" id="tileScreen">0 min</div></div>
         <div class="tile"><div class="tile-label">Rest per screen hour</div><div class="tile-value" id="tileRatio">—</div></div>
+        <div class="tile"><div class="tile-label">Time standing</div><div class="tile-value" id="tileStand">0 min</div></div>
+        <div class="tile"><div class="tile-label">Stand sessions</div><div class="tile-value" id="tileStands">0</div></div>
       </div>
 
       <div class="footer">

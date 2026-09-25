@@ -24,6 +24,7 @@ class RestTimer extends EventEmitter {
     this.now = opts.now ?? Date.now;
     this.idleSeconds = opts.idleSeconds ?? (() => 0);
     this.isFullscreen = opts.isFullscreen ?? (() => false);
+    this.isStanding = opts.isStanding ?? (() => false);
     this.deferredSince = 0;
     this.deferReason = null; // 'fullscreen' | 'zone'
 
@@ -160,7 +161,7 @@ class RestTimer extends EventEmitter {
         const hold = this.holdReason(s, now);
         // Idle long enough? You were already resting: restart the work block when you return.
         // (Not while fullscreen: a controller or a movie doesn't register as input.)
-        if (hold !== 'fullscreen' && s.idleResetMinutes > 0 && this.idleSeconds() * 1000 >= s.idleResetMinutes * this.unitMs) {
+        if (hold !== 'fullscreen' && hold !== 'standing' && s.idleResetMinutes > 0 && this.idleSeconds() * 1000 >= s.idleResetMinutes * this.unitMs) {
           this.phase = 'away';
           break;
         }
@@ -209,6 +210,7 @@ class RestTimer extends EventEmitter {
 
   /** Why a due break should wait right now, or null. Zones win over fullscreen for display. */
   holdReason(s, now) {
+    if (this.isStanding()) return 'standing'; // standing sessions take priority over breaks
     if (activeZone(s.zones, now)) return 'zone';
     if (s.holdForFullscreen && this.isFullscreen()) return 'fullscreen';
     return null;

@@ -4,6 +4,8 @@
 //   completed  – breaks you finished
 //   skipped    – breaks you skipped
 //   snoozed    – breaks you pushed back
+//   standMs    – time spent standing (from "I'm standing" to "Desk is down")
+//   stands     – standing sessions completed
 const fs = require('fs');
 const path = require('path');
 
@@ -16,7 +18,7 @@ function dayKey(ms) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-const emptyDay = () => ({ restMs: 0, workMs: 0, completed: 0, skipped: 0, snoozed: 0 });
+const emptyDay = () => ({ restMs: 0, workMs: 0, completed: 0, skipped: 0, snoozed: 0, standMs: 0, stands: 0 });
 
 class Stats {
   constructor(dir, { now = Date.now } = {}) {
@@ -62,6 +64,13 @@ class Stats {
     if (reason === 'completed') day.completed += 1;
     else if (reason === 'skipped') day.skipped += 1;
     else if (reason === 'snoozed') day.snoozed += 1;
+    this.save();
+  }
+
+  recordStand(ms) {
+    const day = this.#day(this.now());
+    day.standMs = (day.standMs || 0) + Math.max(0, ms);
+    day.stands = (day.stands || 0) + 1;
     this.save();
   }
 
