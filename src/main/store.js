@@ -9,6 +9,12 @@ const DEFAULTS = {
   longBreakEnabled: true,
   longBreakEvery: 4, // every Nth break is a long one
   longBreakMinutes: 10,
+  // Standing desk (its own rhythm; regular breaks wait while you stand)
+  standEnabled: true,
+  standEveryMinutes: 60,
+  standMinutes: 15, // includes the exercise routine
+  standRoutine: 'short', // 'short' (~3 min) | 'full' (~6 min) | 'none'
+
   zones: [], // break zones: [{ id, label, days: [0-6], start: 'HH:MM', end: 'HH:MM', enabled }]
 
   // Break screen

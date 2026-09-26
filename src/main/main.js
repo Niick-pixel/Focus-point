@@ -10,6 +10,8 @@ const { createDetector } = require('./fullscreen');
 const { Stats } = require('./stats');
 const { createKeyBlocker } = require('./keyblock');
 const { createUpdater } = require('./updater');
+const { StandTimer } = require('./stand');
+const { activeZone } = require('./zones');
 
 const FAST = process.argv.includes('--fast'); // dev: "minutes" become seconds
 const START_HIDDEN = process.argv.includes('--hidden');
@@ -42,6 +44,10 @@ let quitting = false;
 let lastTrayLabel = '';
 let keyBlocker;
 let updater;
+let isFullscreen = () => false;
+let stand;
+let standWins = [];
+let widgetWin = null;
 let alternateTurn = 0; // 'alternate' activity: breathe, eyes, breathe, ...
 
 // ---------------------------------------------------------------------------
@@ -241,6 +247,131 @@ function closeOverlays() {
 }
 
 // ---------------------------------------------------------------------------
+// Standing desk: raise / exercise / lower screens and the floating widget
+
+function standPayload(mode, primary) {
+  const s = store.get();
+  const st = stand.state();
+  return { mode, primary, theme: s.theme, routine: s.standRoutine, stoodMs: st.standingForMs || 0 };
+}
+
+function openStandWindows(mode) {
+  if (standWins.length) {
+    for (const w of standWins) if (!w.isDestroyed()) w.webContents.send('stand:mode', standPayload(mode, w.__primary));
+    return;
+  }
+  const primaryId = screen.getPrimaryDisplay().id;
+  for (const display of screen.getAllDisplays()) {
+    const primary = display.id === primaryId;
+    const { x, y, width, height } = display.bounds;
+    const win = new BrowserWindow({
+      x, y, width, height,
+      show: false,
+      frame: false,
+      transparent: true,
+      backgroundColor: '#00000000',
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      hasShadow: false,
+      webPreferences: {
+        preload: path.join(__dirname, '..', 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        backgroundThrottling: false,
+        autoplayPolicy: 'no-user-gesture-required',
+      },
+    });
+    win.__primary = primary;
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    win.on('close', (e) => { if (!win.__allowClose && !quitting) e.preventDefault(); });
+    win.loadFile(path.join(RENDERER, 'stand.html'));
+    win.webContents.once('did-finish-load', () => {
+      win.webContents.send('stand:mode', standPayload(mode, primary));
+      win.setFullScreen(true);
+      win.show();
+      if (primary) win.focus();
+    });
+    standWins.push(win);
+  }
+}
+
+function closeStandWindows() {
+  if (!standWins.length) return;
+  const closing = standWins;
+  standWins = [];
+  for (const w of closing) if (!w.isDestroyed()) w.webContents.send('stand:closing');
+  setTimeout(() => destroyWindows(closing), 1600);
+}
+
+function openWidget() {
+  if (widgetWin && !widgetWin.isDestroyed()) return;
+  const area = screen.getPrimaryDisplay().workArea;
+  const width = 232;
+  const height = 60;
+  widgetWin = new BrowserWindow({
+    x: area.x + area.width - width - 16,
+    y: area.y + area.height - height - 16,
+    width,
+    height,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    focusable: false,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  widgetWin.setAlwaysOnTop(true, 'floating');
+  widgetWin.loadFile(path.join(RENDERER, 'widget.html'));
+  widgetWin.once('ready-to-show', () => widgetWin?.showInactive());
+  widgetWin.on('closed', () => { widgetWin = null; });
+}
+
+function closeWidget() {
+  if (widgetWin && !widgetWin.isDestroyed()) widgetWin.destroy();
+  widgetWin = null;
+}
+
+/** Why a stand reminder can't start right now (or null). */
+function standHoldReason() {
+  const s = store.get();
+  const phase = timer.state().phase;
+  if (phase === 'break' || phase === 'waiting') return 'break';
+  if (phase === 'paused' || phase === 'away') return phase;
+  if (activeZone(s.zones, Date.now())) return 'zone';
+  if (s.holdForFullscreen && isFullscreen()) return 'fullscreen';
+  return null;
+}
+
+function standLabel(st) {
+  switch (st.phase) {
+    case 'sitting':
+      if (st.held === 'zone') return 'Stand — waiting for your break zone to end';
+      if (st.held) return 'Stand — waiting';
+      return `Stand in ${fmt(st.dueInMs)}`;
+    case 'raise': return 'Time to stand';
+    case 'exercise': return 'Standing — exercises';
+    case 'standing': return `Standing — ${fmt(st.standingLeftMs)} left`;
+    case 'lower': return 'Time to sit';
+    default: return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Tray
 
 function trayLabel(state) {
@@ -251,6 +382,7 @@ function trayLabel(state) {
     case 'paused': return state.remainingMs != null ? `Paused — ${fmt(state.remainingMs)} left` : 'Paused';
     case 'away': return 'Away — timer restarts when you return';
     case 'deferred':
+      if (state.deferReason === 'standing') return 'Break waiting — you’re standing';
       return state.deferReason === 'zone' && state.zone
         ? `${state.zone.label} — breaks resume at ${clock(state.zone.endsAt)}`
         : 'Break waiting — fullscreen app open';
@@ -260,11 +392,17 @@ function trayLabel(state) {
 
 function buildTrayMenu(state) {
   const paused = state.phase === 'paused' || state.phase === 'away';
+  const st = stand?.state();
+  const standLine = st ? standLabel(st) : null;
   return Menu.buildFromTemplate([
     { label: trayLabel(state), enabled: false },
+    ...(standLine ? [{ label: standLine, enabled: false }] : []),
     { type: 'separator' },
     { label: 'Take a break now', click: () => timer.breakNow(), enabled: state.phase !== 'break' },
     { label: 'Restart work timer', click: () => timer.startWork(), enabled: state.phase === 'working' },
+    ...(st && st.phase !== 'off'
+      ? [{ label: 'Stand now', click: () => stand.standNow(), enabled: !stand.isActive() }]
+      : []),
     paused
       ? { label: 'Resume', click: () => timer.resume() }
       : {
@@ -298,9 +436,11 @@ function createTray() {
 function updateTray(state) {
   if (!tray) return;
   const label = trayLabel(state);
-  tray.setToolTip(`Focus Point — ${label}`);
+  const st = stand?.state();
+  const standLine = st ? standLabel(st) : null;
+  tray.setToolTip(`Focus Point — ${label}${standLine ? `\n${standLine}` : ''}`);
   // Rebuild the menu only when its text changes (avoids closing an open menu every second).
-  const key = `${label}|${state.phase}|${updater?.state().status}`;
+  const key = `${label}|${standLine}|${state.phase}|${updater?.state().status}`;
   if (key !== lastTrayLabel) {
     lastTrayLabel = key;
     tray.setContextMenu(buildTrayMenu(state));
@@ -341,6 +481,7 @@ function registerIpc() {
     applyThemeToSettings(s.theme);
     applyLoginItem(s.launchAtLogin);
     timer.restartWork();
+    stand.refresh();
     broadcast('settings:changed', s);
     return s;
   });
@@ -350,11 +491,22 @@ function registerIpc() {
     if ('theme' in partial) applyThemeToSettings(s.theme);
     if ('launchAtLogin' in partial) applyLoginItem(s.launchAtLogin);
     if ('workMinutes' in partial && partial.workMinutes !== before.workMinutes) timer.restartWork();
+    if ('standEnabled' in partial) stand.refresh();
+    if ('standEveryMinutes' in partial && partial.standEveryMinutes !== before.standEveryMinutes) stand.restartSitting();
     broadcast('settings:changed', s);
     return s;
   });
 
   ipcMain.handle('state:get', () => timer.state());
+  ipcMain.handle('stand:state', () => stand.state());
+  ipcMain.on('stand:now', () => stand.standNow());
+  ipcMain.on('stand:up', () => stand.up());
+  ipcMain.on('stand:notNow', () => stand.notNow());
+  ipcMain.on('stand:skip', () => stand.skip());
+  ipcMain.on('stand:exercisesDone', () => stand.exercisesDone());
+  ipcMain.on('stand:sitNow', () => stand.sitNow());
+  ipcMain.on('stand:more', () => stand.moreTime(5));
+  ipcMain.on('stand:down', () => stand.down());
   ipcMain.handle('stats:get', () => stats.get());
   ipcMain.handle('stats:clear', () => {
     stats.clear();
@@ -408,15 +560,57 @@ app.whenReady().then(() => {
   const firstRun = !require('fs').existsSync(store.file);
   if (firstRun) store.set({}); // write defaults
 
+  isFullscreen = createDetector();
   timer = new RestTimer(() => store.get(), {
     unitMs: FAST ? 1000 : 60000,
     idleSeconds: () => powerMonitor.getSystemIdleTime(),
-    isFullscreen: createDetector(),
+    isFullscreen,
+    isStanding: () => stand?.isActive() ?? false,
   });
 
+  stand = new StandTimer(() => store.get(), {
+    unitMs: FAST ? 1000 : 60000,
+    holdReason: standHoldReason,
+  });
+
+  let lastPhase = timer.state().phase;
   timer.on('state', (state) => {
     updateTray(state);
     broadcast('state', state);
+    // Back from being away or paused: you weren't sitting all that time.
+    if ((lastPhase === 'away' || lastPhase === 'paused') && state.phase === 'working') stand.restartSitting();
+    lastPhase = state.phase;
+  });
+
+  stand.on('state', (st) => {
+    broadcast('stand:state', st);
+    updateTray(timer.state());
+  });
+  stand.on('warning', ({ secondsLeft }) => {
+    if (!Notification.isSupported()) return;
+    new Notification({
+      title: `Stand up in ${secondsLeft} seconds`,
+      body: 'Get ready to raise your desk.',
+      icon: path.join(ASSETS, 'icon.png'),
+      silent: true,
+    }).show();
+  });
+  stand.on('raise', () => {
+    if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('preview:stop');
+    openStandWindows('raise');
+  });
+  stand.on('exercise', () => openStandWindows('exercise'));
+  stand.on('standing', () => {
+    closeStandWindows();
+    openWidget();
+  });
+  stand.on('lower', () => {
+    closeWidget();
+    openStandWindows('lower');
+  });
+  stand.on('closed', () => {
+    closeStandWindows();
+    closeWidget();
   });
   timer.on('warning', ({ secondsLeft }) => {
     if (!Notification.isSupported()) return;
@@ -444,12 +638,18 @@ app.whenReady().then(() => {
   keyBlocker = createKeyBlocker();
   stats = new Stats(app.getPath('userData'));
   stats.attach(timer, () => broadcast('stats:changed'));
+  stand.on('stood', ({ ms }) => {
+    stats.recordStand(ms);
+    broadcast('stats:changed');
+  });
 
   updater = createUpdater({ app, getSettings: () => store.get(), onChange: onUpdateChange });
 
   registerIpc();
   applyLoginItem(store.get().launchAtLogin);
   timer.start();
+  stand.sit();
+  setInterval(() => stand.tick(), 1000);
   createTray();
   updater.start();
 

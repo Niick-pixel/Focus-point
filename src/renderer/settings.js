@@ -26,6 +26,7 @@ const FORMATS = {
   sec: (v) => (v === 0 ? 'Off' : `${v} s`),
   breaks: (v) => `${v} breaks`,
   idle: (v) => (v === 0 ? 'Never' : `${v} min`),
+  hm: (v) => (v < 60 ? `${v} min` : `${Math.floor(v / 60)} h${v % 60 ? ` ${v % 60} min` : ''}`),
   maxwait: (v) => (v === 0 ? 'As long as it takes' : v < 60 ? `${v} min` : `${Math.floor(v / 60)} h${v % 60 ? ` ${v % 60} min` : ''}`),
 };
 
@@ -92,6 +93,11 @@ function render() {
     none: 'Just the countdown and your tip.',
   };
   $('#activityHint').textContent = hints[settings.breakActivity] || '';
+  $('#routineHint').textContent = {
+    short: 'Find your pelvic floor, long holds, quick flicks, mini squats and a full release.',
+    full: 'Adds the elevator, heel raises, pelvic tilts, hip circles and a standing march.',
+    none: 'Just the reminders to raise and lower your desk.',
+  }[settings.standRoutine] || '';
   for (const el of $$('[data-disabled-if]')) el.classList.toggle('disabled', !!settings[el.dataset.disabledIf]);
 
   const tips = $('#tips');
@@ -212,6 +218,7 @@ function wireControls() {
   api.onNavTab(showTab);
 
   $('#breakNow').addEventListener('click', () => api.breakNow());
+  $('#standNow').addEventListener('click', () => api.standNow());
   $('#pauseBtn').addEventListener('click', () => {
     if ($('#pauseBtn').dataset.mode === 'resume') api.resume();
     else api.pauseMenu();
@@ -329,6 +336,24 @@ function renderUpdate(u) {
   if (u.status === 'ready') $('#installUpdate').textContent = `Restart to update to v${u.version}`;
 }
 
+// ---- standing ----------------------------------------------------------------
+
+function renderStand(st) {
+  const line = $('#standLine');
+  const text = {
+    sitting: st.held
+      ? (st.held === 'zone' ? 'Stand after your break zone' : 'Stand reminder waiting')
+      : `Stand in ${st.dueInMs >= 3600000 ? clockFmt(st.dueInMs) : `${Math.ceil(st.dueInMs / 60000)} min`}`,
+    raise: 'Time to stand',
+    exercise: 'Standing · exercises',
+    standing: `Standing · ${clockFmt(st.standingLeftMs)} left`,
+    lower: 'Time to sit',
+  }[st.phase];
+  line.hidden = !text;
+  if (text) line.textContent = text;
+  $('#standNow').disabled = st.phase !== 'sitting';
+}
+
 // ---- boot -------------------------------------------------------------------
 
 (async () => {
@@ -344,6 +369,8 @@ function renderUpdate(u) {
     settings = s;
     render();
   });
+  renderStand(await api.getStandState());
+  api.onStandState(renderStand);
   renderUpdate(await api.updateState());
   api.onUpdate(renderUpdate);
   $('#checkUpdates').addEventListener('click', () => api.checkForUpdates());
