@@ -252,7 +252,12 @@ function closeOverlays() {
 function standPayload(mode, primary) {
   const s = store.get();
   const st = stand.state();
-  return { mode, primary, theme: s.theme, routine: s.standRoutine, stoodMs: st.standingForMs || 0 };
+  const sessions = Object.values(stats.get()).reduce((n, d) => n + (d.stands || 0), 0);
+  const level = sessions >= 25 ? 3 : sessions >= 10 ? 2 : 1; // same thresholds as StandExercises.levelFor
+  return {
+    mode, primary, theme: s.theme, routine: s.standRoutine, voice: !!s.standVoice, level,
+    stoodMs: st.standingForMs || 0,
+  };
 }
 
 function openStandWindows(mode) {

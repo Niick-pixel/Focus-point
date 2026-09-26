@@ -3,7 +3,8 @@ body.secondary .actions,
 body.secondary .ex-stage,
 body.secondary .ex-bottom,
 body.secondary .ex-how,
-body.secondary .mute { display: none !important; }
+body.secondary .mute,
+body.secondary .voice { display: none !important; }
 
 /* ---- Raise / lower -------------------------------------------------------- */
 .desk-view { gap: 14px; }
@@ -74,6 +75,7 @@ figure { margin: 0; }
 .fig-torso { stroke-width: 42; }
 .fig-head { fill: color-mix(in srgb, var(--text) 88%, transparent); }
 .fig-pelvis { fill: color-mix(in srgb, var(--text) 88%, transparent); }
+.fig-desk { stroke: color-mix(in srgb, var(--text) 40%, transparent); stroke-width: 6; stroke-linecap: round; }
 .fig-floor { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 0 6px var(--accent)); }
 
 /* Pelvis diagram */
@@ -117,3 +119,32 @@ figure { margin: 0; }
   .ex-how { display: none; }
   .ex-text { min-height: 130px; }
 }
+
+/* Focus caption + dimmed pelvis diagram during stretches */
+.ex-figure { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ex-focus { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); min-height: 1.2em; }
+.ex-stage { transition: gap .8s ease; }
+.ex-pelvis { width: clamp(240px, 26vw, 380px); overflow: hidden; transition: width .8s ease, opacity .6s ease; }
+.ex-pelvis svg { width: clamp(240px, 26vw, 380px); }
+.ex-stage.solo { gap: 0; }
+.ex-stage.solo .ex-pelvis { width: 0; opacity: 0; }
+
+/* Voice toggle sits next to the mute button */
+.voice {
+  position: fixed;
+  right: 80px;
+  bottom: 28px;
+  z-index: 2;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  transition: color .2s, background .2s;
+}
+.voice:hover { color: var(--text); background: var(--surface-2); }
+.voice[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+body.paused .ex-cue { opacity: .5; }

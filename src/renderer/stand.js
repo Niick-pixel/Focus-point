@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const { Figure, PelvisDiagram, Desk } = window.StandVisuals;
-const { EXERCISES, ROUTINES, GET_READY } = window.StandExercises;
+const { ROUTINES, ROUTINE_NAMES, GET_READY, getExercise } = window.StandExercises;
 
 let payload = null;
 let frame = 0;
@@ -16,7 +16,7 @@ let audio = null;
 let lastChime = 0;
 
 function chime(freq, gain = 0.06, length = 0.5) {
-  if (muted || !payload?.primary) return;
+  if (muted || voiceOn || !payload?.primary) return;
   const now = performance.now();
   if (now - lastChime < 1400) return; // never nag: at most one cue every 1.4 s
   lastChime = now;
@@ -35,6 +35,42 @@ function chime(freq, gain = 0.06, length = 0.5) {
     o.stop(t + length + 0.05);
   } catch { /* audio unavailable */ }
 }
+
+// ---- spoken cues (optional) ------------------------------------------------------
+
+let voiceOn = false;
+let lastSpoken = '';
+
+function speak(text) {
+  if (!voiceOn || !payload?.primary || !('speechSynthesis' in window)) return;
+  // Speak each kind of cue once ("Hold… 4", "Hold… 3" → "Hold").
+  const key = text.replace(/[…\d]+/g, '').trim();
+  if (!key || key === lastSpoken) return;
+  lastSpoken = key;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(key);
+    const voices = speechSynthesis.getVoices();
+    u.voice = voices.find((v) => /^en(-|_)/i.test(v.lang) && /natural|aria|jenny|guy|zira/i.test(v.name))
+      || voices.find((v) => /^en(-|_)/i.test(v.lang)) || null;
+    u.rate = 0.95;
+    u.volume = 0.9;
+    speechSynthesis.speak(u);
+  } catch { /* speech unavailable */ }
+}
+
+function renderVoice() {
+  $('voice').setAttribute('aria-pressed', String(voiceOn));
+  $('voice').title = voiceOn ? 'Spoken cues: on' : 'Spoken cues: off';
+}
+
+$('voice').addEventListener('click', () => {
+  voiceOn = !voiceOn;
+  lastSpoken = '';
+  if (!voiceOn) try { speechSynthesis.cancel(); } catch { /* ignore */ }
+  window.api.setSettings({ standVoice: voiceOn });
+  renderVoice();
+});
 
 function renderMute() {
   $('mute').classList.toggle('muted', muted);
@@ -95,11 +131,12 @@ function showDesk(direction) {
 
 // ---- guided routine -------------------------------------------------------------
 
-function buildSegments(name) {
+function buildSegments(name, level) {
   const ids = ROUTINES[name] || ROUTINES.short;
   let t = 0;
   return ids.map((id, index) => {
-    const seg = { id, index, start: t, readyEnd: t + GET_READY, end: t + GET_READY + EXERCISES[id].secs };
+    const ex = getExercise(id, level);
+    const seg = { id, ex, index, start: t, readyEnd: t + GET_READY, end: t + GET_READY + ex.secs };
     t = seg.end;
     return seg;
   });
@@ -113,11 +150,14 @@ function showExercises() {
   const pelSvg = $('pelvis');
   figSvg.replaceChildren();
   pelSvg.replaceChildren();
-  const segments = buildSegments(payload.routine);
+  const segments = buildSegments(payload.routine, payload.level || 1);
+  const level = payload.level || 1;
+  $('exEyebrow').textContent = `Standing · ${ROUTINE_NAMES[payload.routine] || 'Pelvic floor'}${payload.routine === 'stretch' ? '' : ` · Level ${level}`}`;
   routine = {
     segments,
     t0: performance.now(),
     offset: 0,
+    pausedAt: 0,
     figure: new Figure(figSvg),
     pelvis: new PelvisDiagram(pelSvg),
     seg: -1,
@@ -129,13 +169,29 @@ function showExercises() {
 }
 
 function elapsed() {
-  return (performance.now() - routine.t0) / 1000 + routine.offset;
+  const now = routine.pausedAt || performance.now();
+  return (now - routine.t0) / 1000 + routine.offset;
+}
+
+function togglePause() {
+  if (!routine || $('exerciseView').hidden) return;
+  if (routine.pausedAt) {
+    routine.offset -= (performance.now() - routine.pausedAt) / 1000;
+    routine.pausedAt = 0;
+    $('exPause').textContent = 'Pause';
+    document.body.classList.remove('paused');
+  } else {
+    routine.pausedAt = performance.now();
+    $('exPause').textContent = 'Resume';
+    document.body.classList.add('paused');
+    try { speechSynthesis.cancel(); } catch { /* ignore */ }
+  }
 }
 
 function skipToNext() {
   if (!routine) return;
   const t = elapsed();
-  const next = routine.segments.find((s) => s.start > t);
+  const next = routine.segments.find((seg) => seg.start > t);
   if (next) routine.offset += next.start - t;
   else finish();
 }
@@ -168,12 +224,17 @@ function routineFrame() {
     return;
   }
   const seg = segs[segIndex];
-  const ex = EXERCISES[seg.id];
+  const ex = seg.ex;
 
   if (segIndex !== routine.seg) {
     routine.seg = segIndex;
     $('exTitle').textContent = ex.title;
     $('exHow').textContent = ex.how;
+    $('exFocus').textContent = `Focus · ${ex.focus}`;
+    // Stretches get the stage to themselves; the pelvis diagram returns for pelvic-floor work.
+    $('exPelvis').closest('.ex-stage').classList.toggle('solo', ex.focus !== 'Pelvic floor');
+    lastSpoken = '';
+    speak(`${segIndex === 0 ? '' : 'Next: '}${ex.title}`);
     [...$('exDots').children].forEach((d, i) => {
       d.classList.toggle('done', i < segIndex);
       d.classList.toggle('now', i === segIndex);
@@ -191,10 +252,15 @@ function routineFrame() {
     $('exBar').style.width = `${((t - seg.readyEnd) / ex.secs) * 100}%`;
   }
 
+  if (routine.pausedAt) {
+    setCue('Paused');
+    return;
+  }
   routine.figure.ease({ ...state.pose, floor: state.floor });
   routine.pelvis.set(state.floor);
   setCue(state.cue);
-  $('exCount').textContent = state.count ? `Rep ${state.count}` : '';
+  if (t >= seg.readyEnd) speak(state.cue);
+  $('exCount').textContent = !state.count ? '' : /^\d/.test(state.count) ? `Rep ${state.count}` : state.count;
 
   // Soft cue as the lift begins (higher note) or fully lets go (lower note).
   if (routine.lastFloor < 0.45 && state.floor >= 0.45) chime(660, 0.035, 0.35);
@@ -203,6 +269,7 @@ function routineFrame() {
 }
 
 $('exSkip').addEventListener('click', skipToNext);
+$('exPause').addEventListener('click', togglePause);
 $('exEnd').addEventListener('click', finish);
 
 // ---- frame loop ---------------------------------------------------------------
@@ -223,7 +290,9 @@ window.api.onStandMode((p) => {
   payload = { ...payload, ...p };
   document.documentElement.dataset.theme = payload.theme || 'night';
   document.body.classList.toggle('secondary', !payload.primary);
+  voiceOn = !!payload.voice;
   renderMute();
+  renderVoice();
   if (p.mode === 'raise') showDesk('up');
   else if (p.mode === 'lower') showDesk('down');
   else if (p.mode === 'exercise') {
@@ -235,9 +304,13 @@ window.api.onStandMode((p) => {
 
 window.api.onStandClosing(() => {
   document.body.classList.add('leaving');
+  try { speechSynthesis.cancel(); } catch { /* ignore */ }
   setTimeout(() => cancelAnimationFrame(frame), 1500);
 });
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' || (e.ctrlKey && ['r', 'w'].includes(e.key.toLowerCase())) || e.key === 'F5') e.preventDefault();
+  if (!routine || $('exerciseView').hidden || e.target.closest?.('button')) return;
+  if (e.key === ' ') { e.preventDefault(); togglePause(); }
+  if (e.key === 'ArrowRight') skipToNext();
 });

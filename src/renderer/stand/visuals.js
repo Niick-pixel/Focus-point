@@ -36,7 +36,8 @@
       el('stop', { offset: '0%', 'stop-color': 'var(--accent)', 'stop-opacity': '0.95' }, glow);
       el('stop', { offset: '100%', 'stop-color': 'var(--accent)', 'stop-opacity': '0' }, glow);
 
-      el('ellipse', { cx: 160, cy: GROUND + 6, rx: 78, ry: 7, class: 'fig-shadow' }, svg);
+      el('ellipse', { cx: 150, cy: GROUND + 6, rx: 96, ry: 7, class: 'fig-shadow' }, svg);
+      this.desk = el('line', { class: 'fig-desk' }, svg);
       this.far = this.#limbSet('fig-far');
       this.halo = el('circle', { r: 46, fill: 'url(#pelvisGlow)', opacity: 0 }, svg);
       this.torso = el('path', { class: 'fig-torso' }, svg);
@@ -45,11 +46,15 @@
       this.floorArc = el('path', { class: 'fig-floor' }, svg);
       this.head = el('circle', { r: L.head, class: 'fig-head' }, svg);
       this.pose = Figure.neutral();
-      this.armW = { hang: 1, forward: 0, hips: 0 }; // blended so arm changes glide
+      // Arm modes are blended so changes glide instead of snapping.
+      this.armW = { hang: 1, forward: 0, hips: 0, overhead: 0, behind: 0, desk: 0 };
     }
 
     static neutral() {
-      return { squat: 0, heel: 0, tilt: 0, swayX: 0, swayY: 0, march: 0, arms: 'hang', reach: 0, floor: 0 };
+      return {
+        squat: 0, heel: 0, tilt: 0, swayX: 0, swayY: 0, march: 0, arms: 'hang', reach: 0, floor: 0,
+        stance: 0, sink: 0, backHeel: 0, hinge: 0, lean: 0, headBack: 0,
+      };
     }
 
     #limbSet(cls) {
@@ -65,10 +70,29 @@
       node.setAttribute('x2', b[0].toFixed(1)); node.setAttribute('y2', b[1].toFixed(1));
     }
 
+    /**
+     * Two-bone inverse kinematics: joint position between `a` and `b` for segment
+     * lengths l1, l2. `prefer(p, q)` picks between the two mirror solutions.
+     * If the target is out of reach, the limb points straight at it.
+     */
+    static #ik(a, b, l1, l2, prefer) {
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const dist = Math.hypot(dx, dy) || 0.001;
+      const d = Math.min(dist, l1 + l2 - 0.5);
+      const base = Math.atan2(dy, dx);
+      const cosA = clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1);
+      const off = Math.acos(cosA);
+      const j1 = [a[0] + l1 * Math.cos(base + off), a[1] + l1 * Math.sin(base + off)];
+      const j2 = [a[0] + l1 * Math.cos(base - off), a[1] + l1 * Math.sin(base - off)];
+      const joint = prefer(j1, j2) ? j1 : j2;
+      const end = dist > d ? [a[0] + (dx / dist) * (l1 + l2 - 0.5), a[1] + (dy / dist) * (l1 + l2 - 0.5)] : b;
+      return { joint, end };
+    }
+
     /** Smoothly move toward a target pose (k = 0..1 per frame). */
     ease(target, k = 0.18) {
       const p = this.pose;
-      for (const key of ['squat', 'heel', 'tilt', 'swayX', 'swayY', 'march', 'reach', 'floor']) {
+      for (const key of ['squat', 'heel', 'tilt', 'swayX', 'swayY', 'march', 'reach', 'floor', 'stance', 'sink', 'backHeel', 'hinge', 'lean', 'headBack']) {
         p[key] = lerp(p[key], target[key] ?? 0, k);
       }
       const want = target.arms || 'hang';
@@ -78,52 +102,78 @@
 
     draw() {
       const p = this.pose;
-      // Supporting leg: from the ankle up.
-      const ankleX = 142;
-      const ankle = [ankleX, GROUND - 10 - p.heel * 22];
-      const shinA = rad(p.squat * 40);
-      const knee = [ankle[0] + L.shin * Math.sin(shinA), ankle[1] - L.shin * Math.cos(shinA)];
-      const thighA = rad(p.squat * 82);
-      let hip = [knee[0] - L.thigh * Math.sin(thighA), knee[1] - L.thigh * Math.cos(thighA)];
-      hip = [hip[0] + p.swayX * 12, hip[1] + p.swayY * 5];
+      const heelLift = p.heel * 22;
 
+      // Hip height/position. Squats use the same forward kinematics as before (so they look
+      // identical); `sink` lowers the hips between split feet, a hinge pushes them back.
+      const ankle0 = [142, GROUND - 10 - heelLift];
+      const shinA = rad(p.squat * 40);
+      const thighA = rad(p.squat * 82);
+      const kneeFk = [ankle0[0] + L.shin * Math.sin(shinA), ankle0[1] - L.shin * Math.cos(shinA)];
+      let hip = [kneeFk[0] - L.thigh * Math.sin(thighA), kneeFk[1] - L.thigh * Math.cos(thighA)];
+      hip = [
+        hip[0] + p.swayX * 12 - p.stance * 10 - p.hinge * 28,
+        hip[1] + p.swayY * 5 + p.sink * 34 + p.hinge * 8,
+      ];
+
+      // Foot targets: split stance moves the near foot forward and the far foot back.
+      const nearAnkle = [142 + p.stance * 52, GROUND - 10 - heelLift];
+      const farAnkle = [149 - p.stance * 84, GROUND - 10 - Math.max(heelLift, p.backHeel * 24)];
+      const kneeForward = (j1, j2) => j1[0] >= j2[0];
+      const legIk = (ankle, dx) => {
+        const { joint, end } = Figure.#ik([hip[0] + dx, hip[1]], ankle, L.thigh, L.shin, kneeForward);
+        const grounded = end[1] >= GROUND - 45; // raised heel: the toes stay on the floor
+        return { knee: joint, ankle: end, toe: [end[0] + 30, grounded ? GROUND - 1 : end[1] + 10] };
+      };
       // Marching: one leg hangs from the hip with the thigh lifted.
       const legFromHip = (lift, dx) => {
         const a = rad(lift * 78);
         const k = [hip[0] + dx + L.thigh * Math.sin(a), hip[1] + L.thigh * Math.cos(a)];
-        const s = rad(-lift * 12);
-        const an = [k[0] + L.shin * Math.sin(s), k[1] + L.shin * Math.cos(s)];
+        const sh = rad(-lift * 12);
+        const an = [k[0] + L.shin * Math.sin(sh), k[1] + L.shin * Math.cos(sh)];
         return { knee: k, ankle: an, toe: [an[0] + 30, an[1] + 2 - lift * 4] };
       };
-      const standingLeg = (dx) => ({
-        knee: [knee[0] + dx, knee[1]],
-        ankle: [ankle[0] + dx, ankle[1]],
-        toe: [ankle[0] + dx + 32, GROUND - 1],
-      });
-      const nearLeg = p.march > 0.02 ? legFromHip(p.march, 0) : standingLeg(0);
-      const farLeg = p.march < -0.02 ? legFromHip(-p.march, 7) : standingLeg(7);
+      const nearLeg = p.march > 0.02 ? legFromHip(p.march, 0) : legIk(nearAnkle, 0);
+      const farLeg = p.march < -0.02 ? legFromHip(-p.march, 7) : legIk(farAnkle, 7);
 
-      // Torso leans forward in a squat; pelvic tilt adds a little.
-      const lean = rad(p.squat * 30 + p.tilt * 5 - p.swayX * 3);
+      // Torso: forward in a squat or hinge, slightly back when opening the chest.
+      const lean = rad(p.squat * 30 + p.tilt * 5 - p.swayX * 3 + p.hinge * 64 - p.lean * 12);
       const shoulder = [hip[0] + L.torso * Math.sin(lean), hip[1] - L.torso * Math.cos(lean)];
-      const headC = [shoulder[0] + 26 * Math.sin(lean + rad(6)), shoulder[1] - 26 * Math.cos(lean) - 6];
+      const headLean = lean + rad(6 - p.lean * 10);
+      const headC = [
+        shoulder[0] + 26 * Math.sin(headLean) - p.headBack * 13,
+        shoulder[1] - 26 * Math.cos(headLean) - 6 + p.headBack * 2,
+      ];
 
       // Arms
+      const deskHand = [hip[0] + 112 + p.hinge * 30, hip[1] - 18 + p.hinge * 10];
       const armFor = (mode, dx) => {
         const sh = [shoulder[0] + dx, shoulder[1] + 6];
         if (mode === 'hips') {
           return { elbow: [sh[0] - 30, sh[1] + 46], hand: [hip[0] + 6 + dx, hip[1] - 14] };
         }
-        const reach = mode === 'forward' ? p.reach : 0;
-        const a = rad(6 + reach * 78) + lean * 0.4;
+        if (mode === 'desk') {
+          const { joint, end } = Figure.#ik(sh, [deskHand[0] + dx, deskHand[1]], L.upper, L.fore, (j1, j2) => j1[1] >= j2[1]);
+          return { elbow: joint, hand: end };
+        }
+        let a;
+        let bend;
+        if (mode === 'overhead') { a = rad(172) + lean * 0.3; bend = rad(-4); }
+        else if (mode === 'behind') { a = rad(-40) + lean * 0.3; bend = rad(-12); }
+        else {
+          const reach = mode === 'forward' ? p.reach : 0;
+          a = rad(6 + reach * 78) + lean * 0.4;
+          bend = rad(8 + reach * 6);
+        }
         const elbow = [sh[0] + L.upper * Math.sin(a), sh[1] + L.upper * Math.cos(a)];
-        const b = a + rad(8 + reach * 6);
+        const b = a + bend;
         return { elbow, hand: [elbow[0] + L.fore * Math.sin(b), elbow[1] + L.fore * Math.cos(b)] };
       };
       const blendArm = (dx) => {
         const total = Object.values(this.armW).reduce((a, b) => a + b, 0) || 1;
         const out = { elbow: [0, 0], hand: [0, 0] };
         for (const [mode, w] of Object.entries(this.armW)) {
+          if (w < 0.001) continue;
           const a = armFor(mode, dx);
           for (const j of ['elbow', 'hand']) {
             out[j][0] += (a[j][0] * w) / total;
@@ -135,7 +185,11 @@
       const nearArm = blendArm(0);
       const farArm = blendArm(6);
 
-      // Draw legs
+      // A faint desk edge appears when the hands rest on it.
+      Figure.#line(this.desk, [deskHand[0] - 18, deskHand[1] + 6], [deskHand[0] + 70, deskHand[1] + 6]);
+      this.desk.style.opacity = String(clamp(this.armW.desk) * 0.9);
+
+      // Draw legs and arms
       for (const [set, leg, dx] of [[this.far, farLeg, 7], [this.near, nearLeg, 0]]) {
         Figure.#line(set.thigh, [hip[0] + dx, hip[1]], leg.knee);
         Figure.#line(set.shin, leg.knee, leg.ankle);
@@ -146,12 +200,12 @@
         Figure.#line(set.fore, arm.elbow, arm.hand);
       }
 
-      // Torso: a soft tapered capsule from pelvis to shoulders.
+      // Torso: a soft capsule from pelvis to shoulders.
       this.torso.setAttribute('d', `M${hip[0].toFixed(1)},${hip[1].toFixed(1)} L${shoulder[0].toFixed(1)},${shoulder[1].toFixed(1)}`);
       this.head.setAttribute('cx', headC[0].toFixed(1));
       this.head.setAttribute('cy', headC[1].toFixed(1));
 
-      const tiltDeg = (p.tilt * 16 + p.squat * 22).toFixed(1);
+      const tiltDeg = (p.tilt * 16 + p.squat * 22 + p.hinge * 40).toFixed(1);
       this.pelvis.setAttribute('cx', hip[0].toFixed(1));
       this.pelvis.setAttribute('cy', (hip[1] + 2).toFixed(1));
       this.pelvis.setAttribute('transform', `rotate(${tiltDeg} ${hip[0].toFixed(1)} ${(hip[1] + 2).toFixed(1)})`);
